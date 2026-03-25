@@ -22,14 +22,16 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-// CORS configuration
-const corsOrigins = process.env.CORS_ORIGIN
+// CORS configuration – always include production origins
+const prodOrigins = [
+  'https://hausdorff-crm-production.up.railway.app',
+  'https://crm.hausdorff.co.il',
+  'http://localhost:5173',
+];
+const envOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
-  : [
-      'https://hausdorff-crm-production.up.railway.app',
-      'https://crm.hausdorff.co.il',
-      'http://localhost:5173',
-    ];
+  : [];
+const corsOrigins = [...new Set([...prodOrigins, ...envOrigins])];
 
 app.use(cors({
   origin: isProd
