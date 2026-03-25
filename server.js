@@ -37,7 +37,6 @@ app.use(cors({
   origin: isProd
     ? corsOrigins
     : true,   // allow all origins in development
-  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
