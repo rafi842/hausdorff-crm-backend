@@ -59,16 +59,18 @@ router.post('/', authMiddleware, (req, res) => {
       project_id, address, city, neighborhood, type, status,
       price, area, rooms, floor, total_floors, parking, storage, balcony, elevator,
       description, land_use, zoning_plan, land_area_dunams,
-      has_tenant, monthly_rent, annual_yield, tenant_name, lease_start_date, lease_end_date
+      has_tenant, monthly_rent, annual_yield, tenant_name, lease_start_date, lease_end_date,
+      exclusivity, deal_type
     } = req.body;
     const now = new Date().toISOString();
-    run(`INSERT INTO properties (id,project_id,address,city,neighborhood,type,status,price,area,rooms,floor,total_floors,parking,storage,balcony,elevator,description,land_use,zoning_plan,land_area_dunams,has_tenant,monthly_rent,annual_yield,tenant_name,lease_start_date,lease_end_date,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [id, project_id||null, address, city, neighborhood||'', type||'דירה', status||'זמין',
+    run(`INSERT INTO properties (id,project_id,address,city,neighborhood,type,status,price,area,rooms,floor,total_floors,parking,storage,balcony,elevator,description,land_use,zoning_plan,land_area_dunams,has_tenant,monthly_rent,annual_yield,tenant_name,lease_start_date,lease_end_date,exclusivity,deal_type,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [id, project_id||null, address, city, neighborhood||'', type||'משרד', status||'זמין',
        price||0, area||0, rooms||0, floor||0, total_floors||0,
        parking||0, storage||0, balcony||0, elevator||0, description||'',
        land_use||'', zoning_plan||'', land_area_dunams||0,
        has_tenant ? 1 : 0, monthly_rent||0, annual_yield||0,
-       tenant_name||'', lease_start_date||'', lease_end_date||'', now, now]);
+       tenant_name||'', lease_start_date||'', lease_end_date||'',
+       exclusivity ? 1 : 0, deal_type||'מכירה', now, now]);
     res.status(201).json(get('SELECT * FROM properties WHERE id = ?', [id]));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -81,16 +83,18 @@ router.put('/:id', authMiddleware, (req, res) => {
       project_id, address, city, neighborhood, type, status,
       price, area, rooms, floor, total_floors, parking, storage, balcony, elevator,
       description, land_use, zoning_plan, land_area_dunams,
-      has_tenant, monthly_rent, annual_yield, tenant_name, lease_start_date, lease_end_date
+      has_tenant, monthly_rent, annual_yield, tenant_name, lease_start_date, lease_end_date,
+      exclusivity, deal_type
     } = req.body;
     const now = new Date().toISOString();
-    run(`UPDATE properties SET project_id=?,address=?,city=?,neighborhood=?,type=?,status=?,price=?,area=?,rooms=?,floor=?,total_floors=?,parking=?,storage=?,balcony=?,elevator=?,description=?,land_use=?,zoning_plan=?,land_area_dunams=?,has_tenant=?,monthly_rent=?,annual_yield=?,tenant_name=?,lease_start_date=?,lease_end_date=?,updated_at=? WHERE id=?`,
-      [project_id||null, address, city, neighborhood||'', type||'דירה', status||'זמין',
+    run(`UPDATE properties SET project_id=?,address=?,city=?,neighborhood=?,type=?,status=?,price=?,area=?,rooms=?,floor=?,total_floors=?,parking=?,storage=?,balcony=?,elevator=?,description=?,land_use=?,zoning_plan=?,land_area_dunams=?,has_tenant=?,monthly_rent=?,annual_yield=?,tenant_name=?,lease_start_date=?,lease_end_date=?,exclusivity=?,deal_type=?,updated_at=? WHERE id=?`,
+      [project_id||null, address, city, neighborhood||'', type||'משרד', status||'זמין',
        price||0, area||0, rooms||0, floor||0, total_floors||0,
        parking||0, storage||0, balcony||0, elevator||0, description||'',
        land_use||'', zoning_plan||'', land_area_dunams||0,
        has_tenant ? 1 : 0, monthly_rent||0, annual_yield||0,
-       tenant_name||'', lease_start_date||'', lease_end_date||'', now, req.params.id]);
+       tenant_name||'', lease_start_date||'', lease_end_date||'',
+       exclusivity ? 1 : 0, deal_type||'מכירה', now, req.params.id]);
     res.json(get('SELECT * FROM properties WHERE id = ?', [req.params.id]));
   } catch (err) {
     res.status(500).json({ error: err.message });

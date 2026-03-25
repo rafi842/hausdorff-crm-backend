@@ -212,4 +212,18 @@ router.post('/:id/smart-match', authMiddleware, (req, res) => {
   }
 });
 
+// Mark lead as contacted - updates last_contacted_at
+router.patch('/:id/mark-contacted', (req, res) => {
+  try {
+    const contact = get('SELECT * FROM contacts WHERE id = ?', [req.params.id]);
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+    run('UPDATE contacts SET last_contacted_at = ?, lead_status = CASE WHEN lead_status = ? THEN ? ELSE lead_status END, updated_at = datetime(?) WHERE id = ?',
+      [new Date().toISOString(), 'new', 'contacted', 'now', req.params.id]);
+    const updated = get('SELECT * FROM contacts WHERE id = ?', [req.params.id]);
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
