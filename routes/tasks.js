@@ -54,12 +54,13 @@ router.get('/:id', authMiddleware, (req, res) => {
 router.post('/', authMiddleware, (req, res) => {
   try {
     const id = uuidv4();
-    const { title, description, deal_id, contact_id, assigned_to, due_date, task_time, priority, type } = req.body;
+    const { title, description, deal_id, contact_id, assigned_to, due_date, task_time, priority, type, completion_notes } = req.body;
     const now = new Date().toISOString();
-    run(`INSERT INTO tasks (id,title,description,deal_id,contact_id,assigned_to,due_date,task_time,priority,type,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    run(`INSERT INTO tasks (id,title,description,deal_id,contact_id,assigned_to,due_date,task_time,priority,type,completion_notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [id, title, description||'', deal_id||null, contact_id||null, assigned_to||'מנהל',
-       due_date||null, task_time||'', priority||'בינוני', type||'משימה', now, now]);
-    res.status(201).json(get('SELECT * FROM tasks WHERE id = ?', [id]));
+       due_date||null, task_time||'', priority||'בינוני', type||'משימה', completion_notes||'', now, now]);
+    const task = get(`SELECT t.*, d.title as deal_title, c.first_name || ' ' || c.last_name as contact_name FROM tasks t LEFT JOIN deals d ON t.deal_id = d.id LEFT JOIN contacts c ON t.contact_id = c.id WHERE t.id = ?`, [id]);
+    res.status(201).json(task);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -67,12 +68,14 @@ router.post('/', authMiddleware, (req, res) => {
 
 router.put('/:id', authMiddleware, (req, res) => {
   try {
-    const { title, description, deal_id, contact_id, assigned_to, due_date, task_time, completed, priority, type } = req.body;
+    const { title, description, deal_id, contact_id, assigned_to, due_date, task_time, completed, priority, type, postponed_reason, completion_notes, postpone_count } = req.body;
     const now = new Date().toISOString();
-    run(`UPDATE tasks SET title=?,description=?,deal_id=?,contact_id=?,assigned_to=?,due_date=?,task_time=?,completed=?,priority=?,type=?,updated_at=? WHERE id=?`,
+    run(`UPDATE tasks SET title=?,description=?,deal_id=?,contact_id=?,assigned_to=?,due_date=?,task_time=?,completed=?,priority=?,type=?,postponed_reason=?,completion_notes=?,postpone_count=?,updated_at=? WHERE id=?`,
       [title, description||'', deal_id||null, contact_id||null, assigned_to||'מנהל',
-       due_date||null, task_time||'', completed?1:0, priority||'בינוני', type||'משימה', now, req.params.id]);
-    res.json(get('SELECT * FROM tasks WHERE id = ?', [req.params.id]));
+       due_date||null, task_time||'', completed?1:0, priority||'בינוני', type||'משימה',
+       postponed_reason||'', completion_notes||'', postpone_count||0, now, req.params.id]);
+    const task = get(`SELECT t.*, d.title as deal_title, c.first_name || ' ' || c.last_name as contact_name FROM tasks t LEFT JOIN deals d ON t.deal_id = d.id LEFT JOIN contacts c ON t.contact_id = c.id WHERE t.id = ?`, [req.params.id]);
+    res.json(task);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

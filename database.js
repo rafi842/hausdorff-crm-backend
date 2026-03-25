@@ -233,6 +233,19 @@ async function initializeDatabase() {
     );
   `);
 
+  // ── Tasks migrations ──────────────────────────────────────────────────────
+  const taskCols = all("PRAGMA table_info(tasks)").map(c => c.name);
+  if (!taskCols.includes('postponed_reason')) {
+    db.run("ALTER TABLE tasks ADD COLUMN postponed_reason TEXT DEFAULT ''");
+  }
+  if (!taskCols.includes('completion_notes')) {
+    db.run("ALTER TABLE tasks ADD COLUMN completion_notes TEXT DEFAULT ''");
+  }
+  if (!taskCols.includes('postpone_count')) {
+    db.run("ALTER TABLE tasks ADD COLUMN postpone_count INTEGER DEFAULT 0");
+  }
+  saveDb();
+
   // ── Timeline ───────────────────────────────────────────────────────────────
   db.run(`
     CREATE TABLE IF NOT EXISTS timeline (
