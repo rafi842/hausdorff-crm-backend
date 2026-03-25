@@ -408,6 +408,43 @@ function runMigrations() {
   migrations.forEach(sql => {
     try { db.run(sql); } catch (e) { /* column already exists */ }
   });
+
+  // ── Data migrations: convert residential types to commercial ────────────
+  const dataMigrations = [
+    // Property types: map old residential → new commercial
+    `UPDATE properties SET type = 'משרד' WHERE type IN ('דירה', 'משרדים')`,
+    `UPDATE properties SET type = 'מרכז מסחרי' WHERE type = 'מסחרי'`,
+    `UPDATE properties SET type = 'חנות' WHERE type = 'פנטהאוז'`,
+    `UPDATE properties SET type = 'מרלו"ג' WHERE type IN ('וילה', "קוטג'")`,
+    `UPDATE properties SET type = 'מבנה תעשייה' WHERE type = 'דירת גן'`,
+    `UPDATE properties SET type = 'קרקע לבנייה' WHERE type = 'קרקע'`,
+    // Contact types: map old → new
+    `UPDATE contacts SET type = 'רוכש פוטנציאלי' WHERE type = 'קונה'`,
+    `UPDATE contacts SET type = 'בעל נכס' WHERE type = 'מוכר'`,
+    `UPDATE contacts SET type = 'שוכר פוטנציאלי' WHERE type = 'שוכר'`,
+    `UPDATE contacts SET type = 'בעל נכס' WHERE type = 'משכיר'`,
+    // Lead status: map old → new
+    `UPDATE contacts SET lead_status = 'in_progress' WHERE lead_status = 'qualified'`,
+    // Lead sources: map old → new
+    `UPDATE contacts SET source = 'פרסום ממומן פייסבוק' WHERE source = 'פייסבוק'`,
+    `UPDATE contacts SET source = 'פרסום ממומן גוגל' WHERE source = 'גוגל'`,
+    `UPDATE contacts SET source = 'פה לאוזן / המלצה' WHERE source = 'המלצה'`,
+    `UPDATE contacts SET source = 'פנייה ישירה' WHERE source IN ('ישיר', 'שיחה קרה')`,
+    `UPDATE contacts SET source = 'מודעת נכס (יד2 / מדלן)' WHERE source IN ('יד2', 'מדלן')`,
+    `UPDATE contacts SET source = 'אחר' WHERE source IN ('אתר אינטרנט', 'ייבוא CSV')`,
+    `UPDATE contacts SET source = 'פנייה ישירה' WHERE source = 'שלט'`,
+    // Deal sources
+    `UPDATE deals SET source = 'פרסום ממומן פייסבוק' WHERE source = 'פייסבוק'`,
+    `UPDATE deals SET source = 'פרסום ממומן גוגל' WHERE source = 'גוגל'`,
+    `UPDATE deals SET source = 'פה לאוזן / המלצה' WHERE source = 'המלצה'`,
+    `UPDATE deals SET source = 'פנייה ישירה' WHERE source = 'ישיר'`,
+    `UPDATE deals SET source = 'מודעת נכס (יד2 / מדלן)' WHERE source IN ('יד2', 'מדלן')`,
+    `UPDATE deals SET source = 'אחר' WHERE source = 'אתר אינטרנט'`,
+  ];
+  dataMigrations.forEach(sql => {
+    try { db.run(sql); } catch (e) { /* ignore errors */ }
+  });
+
   saveDb();
 }
 
