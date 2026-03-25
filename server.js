@@ -25,7 +25,11 @@ app.use(helmet({
 // CORS configuration
 const corsOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
-  : ['http://localhost:5173', 'http://localhost:3001'];
+  : [
+      'https://hausdorff-crm-production.up.railway.app',
+      'https://crm.hausdorff.co.il',
+      'http://localhost:5173',
+    ];
 
 app.use(cors({
   origin: isProd
