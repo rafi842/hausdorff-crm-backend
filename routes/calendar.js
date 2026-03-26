@@ -19,6 +19,7 @@ router.post('/auth', authMiddleware, (req, res) => {
 
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
+      prompt: 'consent',
       scope: ['https://www.googleapis.com/auth/calendar.events'],
       state: req.user.id
     });
@@ -46,19 +47,14 @@ router.get('/callback', async (req, res) => {
 
     const { tokens } = await oauth2Client.getToken(code);
 
-    run(`
-      UPDATE users SET
-        google_refresh_token = ?,
-        google_access_token = ?,
-        google_token_expiry = ?,
-        calendar_sync_enabled = 1
-      WHERE id = ?
-    `, [
-      tokens.refresh_token || '',
-      tokens.access_token || '',
-      tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : '',
-      userId
-    ]);
+    // If Google sent a refresh_token, use it. Otherwise keep existing one.
+    if (tokens.refresh_token) {
+      run(`UPDATE users SET google_refresh_token=?, google_access_token=?, google_token_expiry=?, calendar_sync_enabled=1 WHERE id=?`,
+        [tokens.refresh_token, tokens.access_token || '', tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : '', userId]);
+    } else {
+      run(`UPDATE users SET google_access_token=?, google_token_expiry=?, calendar_sync_enabled=1 WHERE id=?`,
+        [tokens.access_token || '', tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : '', userId]);
+    }
 
     // Redirect to frontend settings page
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
