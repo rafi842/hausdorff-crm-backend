@@ -74,12 +74,12 @@ router.post('/', authMiddleware, (req, res) => {
     // Auto-create task if next_action_date is provided
     if (next_action_date && next_action) {
       const taskId = uuidv4();
-      const contactId = entity_type === 'contact' ? entity_id : null;
-      const dealId = entity_type === 'deal' ? entity_id : null;
+      const contactId2 = entity_type === 'contact' ? entity_id : null;
+      const dealId2 = entity_type === 'deal' ? entity_id : null;
       run(`
-        INSERT INTO tasks (id, title, description, deal_id, contact_id, assigned_to, due_date, completed, priority, type)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'בינוני', 'משימה')
-      `, [taskId, next_action, `Follow-up from activity: ${subject}`, dealId, contactId, req.user.name, next_action_date]);
+        INSERT INTO tasks (id, title, description, deal_id, contact_id, assigned_to, assigned_to_id, due_date, completed, priority, type, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'חשוב (לא דחוף)', 'follow_up', datetime('now'), datetime('now'))
+      `, [taskId, next_action, `המשך טיפול מפעילות: ${subject}`, dealId2, contactId2, req.user.name, req.user.id, next_action_date]);
     }
 
     // Insert into timeline for backwards compatibility
@@ -93,6 +93,39 @@ router.post('/', authMiddleware, (req, res) => {
 
     const activity = get('SELECT * FROM activities WHERE id = ?', [id]);
     res.status(201).json(activity);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT update activity
+router.put('/:id', authMiddleware, (req, res) => {
+  try {
+    const activity = get('SELECT * FROM activities WHERE id = ?', [req.params.id]);
+    if (!activity) return res.status(404).json({ error: 'Activity not found' });
+
+    const { activity_type, subject, summary, outcome,
+            next_action, next_action_date, duration_minutes } = req.body;
+
+    run(`UPDATE activities SET
+      activity_type=?, subject=?, summary=?, outcome=?,
+      next_action=?, next_action_date=?, duration_minutes=?
+      WHERE id=?`,
+      [activity_type || activity.activity_type,
+       subject || activity.subject,
+       summary !== undefined ? summary : activity.summary,
+       outcome !== undefined ? outcome : activity.outcome,
+       next_action !== undefined ? next_action : activity.next_action,
+       next_action_date !== undefined ? next_action_date : activity.next_action_date,
+       duration_minutes !== undefined ? duration_minutes : activity.duration_minutes,
+       req.params.id]);
+
+    const updated = get(`
+      SELECT a.*, u.name as created_by_name
+      FROM activities a LEFT JOIN users u ON a.created_by = u.id
+      WHERE a.id = ?
+    `, [req.params.id]);
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
