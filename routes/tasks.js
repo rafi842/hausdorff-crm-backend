@@ -69,9 +69,9 @@ router.get('/', authMiddleware, (req, res) => {
     let query = ENRICHED_SELECT + ' WHERE 1=1';
     const params = [];
 
-    // User-scoped filtering: show only user's own + shared tasks
+    // User-scoped filtering: show own + shared + legacy (assigned_to_id IS NULL) tasks
     if (user_id && show_all !== 'true') {
-      query += ` AND (t.assigned_to_id = ? OR t.id IN (
+      query += ` AND (t.assigned_to_id = ? OR t.assigned_to_id IS NULL OR t.id IN (
         SELECT tp.task_id FROM task_participants tp WHERE tp.user_id = ?
       ))`;
       params.push(user_id, user_id);

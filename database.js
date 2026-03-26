@@ -246,11 +246,11 @@ async function initializeDatabase() {
   }
   if (!taskCols.includes('assigned_to_id')) {
     db.run("ALTER TABLE tasks ADD COLUMN assigned_to_id TEXT DEFAULT NULL");
-    // Migrate existing name-based assignments to ID-based
-    db.run(`UPDATE tasks SET assigned_to_id = (
-      SELECT u.id FROM users u WHERE u.name = tasks.assigned_to
-    ) WHERE assigned_to_id IS NULL`);
   }
+  // Always try to populate NULL assigned_to_id from user names (runs every startup)
+  db.run(`UPDATE tasks SET assigned_to_id = (
+    SELECT u.id FROM users u WHERE u.name = tasks.assigned_to
+  ) WHERE assigned_to_id IS NULL AND assigned_to IS NOT NULL`);
   if (!taskCols.includes('property_id')) {
     db.run("ALTER TABLE tasks ADD COLUMN property_id TEXT DEFAULT NULL");
   }
