@@ -244,6 +244,38 @@ async function initializeDatabase() {
   if (!taskCols.includes('postpone_count')) {
     db.run("ALTER TABLE tasks ADD COLUMN postpone_count INTEGER DEFAULT 0");
   }
+  if (!taskCols.includes('assigned_to_id')) {
+    db.run("ALTER TABLE tasks ADD COLUMN assigned_to_id TEXT DEFAULT NULL");
+    // Migrate existing name-based assignments to ID-based
+    db.run(`UPDATE tasks SET assigned_to_id = (
+      SELECT u.id FROM users u WHERE u.name = tasks.assigned_to
+    ) WHERE assigned_to_id IS NULL`);
+  }
+  if (!taskCols.includes('property_id')) {
+    db.run("ALTER TABLE tasks ADD COLUMN property_id TEXT DEFAULT NULL");
+  }
+  if (!taskCols.includes('company_id')) {
+    db.run("ALTER TABLE tasks ADD COLUMN company_id TEXT DEFAULT NULL");
+  }
+
+  // ── Task Participants (multi-agent shared tasks) ─────────────────────────
+  db.run(`
+    CREATE TABLE IF NOT EXISTS task_participants (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      role TEXT DEFAULT 'participant',
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(task_id, user_id)
+    )
+  `);
+  // Seed existing owners into task_participants
+  const tpCount = get("SELECT COUNT(*) as cnt FROM task_participants");
+  if (tpCount && tpCount.cnt === 0) {
+    db.run(`INSERT OR IGNORE INTO task_participants (id, task_id, user_id, role)
+      SELECT hex(randomblob(16)), t.id, t.assigned_to_id, 'owner'
+      FROM tasks t WHERE t.assigned_to_id IS NOT NULL`);
+  }
   saveDb();
 
   // ── Timeline ───────────────────────────────────────────────────────────────

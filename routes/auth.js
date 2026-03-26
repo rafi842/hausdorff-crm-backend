@@ -70,6 +70,16 @@ router.get('/me', authMiddleware, (req, res) => {
   }
 });
 
+// GET /api/auth/agents - All authenticated users (lightweight: id + name only)
+router.get('/agents', authMiddleware, (req, res) => {
+  try {
+    const agents = all('SELECT id, name FROM users ORDER BY name');
+    res.json(agents);
+  } catch (err) {
+    res.status(500).json({ error: 'שגיאת שרת פנימית' });
+  }
+});
+
 // GET /api/auth/users - Admin only
 router.get('/users', authMiddleware, (req, res) => {
   try {
