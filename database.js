@@ -306,6 +306,12 @@ async function initializeDatabase() {
     );
   `);
 
+  // Add status column to match_notifications if missing
+  const mnCols = all("PRAGMA table_info(match_notifications)").map(c => c.name);
+  if (!mnCols.includes('status')) {
+    db.run("ALTER TABLE match_notifications ADD COLUMN status TEXT DEFAULT 'new'");
+  }
+
   // ── Proposals ──────────────────────────────────────────────────────────────
   db.run(`
     CREATE TABLE IF NOT EXISTS proposals (

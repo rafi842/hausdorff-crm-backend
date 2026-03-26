@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { get, all } = require('../database');
+const { get, all, run } = require('../database');
+const { v4: uuidv4 } = require('uuid');
 const { authMiddleware } = require('../middleware/auth');
 
 router.get('/stats', authMiddleware, (req, res) => {
@@ -153,23 +154,30 @@ router.get('/tasks/week', authMiddleware, (req, res) => {
   }
 });
 
-// Match notifications
+// Match notifications — enhanced with contact/property details + status filtering
 router.get('/match-notifications', authMiddleware, (req, res) => {
   try {
+    const { include_dismissed } = req.query;
+    const filter = include_dismissed === 'true' ? '' : "WHERE (mn.status IS NULL OR mn.status != 'dismissed')";
     const notifications = all(`
       SELECT mn.*,
         c.first_name || ' ' || c.last_name as contact_name,
         c.phone as contact_phone,
+        c.type as contact_type,
         p.address as property_address,
         p.city as property_city,
         p.price as property_price,
-        p.annual_yield as property_yield
+        p.annual_yield as property_yield,
+        p.type as property_type,
+        p.area as property_area,
+        p.rooms as property_rooms,
+        p.deal_type as property_deal_type
       FROM match_notifications mn
       LEFT JOIN contacts c ON mn.contact_id = c.id
       LEFT JOIN properties p ON mn.property_id = p.id
-      WHERE mn.seen = 0
-      ORDER BY mn.created_at DESC
-      LIMIT 20
+      ${filter}
+      ORDER BY mn.score DESC, mn.created_at DESC
+      LIMIT 50
     `);
     res.json(notifications);
   } catch (err) {
@@ -179,9 +187,73 @@ router.get('/match-notifications', authMiddleware, (req, res) => {
 
 router.patch('/match-notifications/:id/seen', authMiddleware, (req, res) => {
   try {
-    const { run } = require('../database');
     run('UPDATE match_notifications SET seen=1 WHERE id=?', [req.params.id]);
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update match notification status
+router.patch('/match-notifications/:id/status', authMiddleware, (req, res) => {
+  try {
+    const { status } = req.body;
+    const valid = ['new', 'contacted', 'deal_created', 'dismissed'];
+    if (!valid.includes(status)) {
+      return res.status(400).json({ error: `Invalid status. Must be one of: ${valid.join(', ')}` });
+    }
+    run('UPDATE match_notifications SET status=? WHERE id=?', [status, req.params.id]);
+    if (status === 'dismissed') {
+      run('UPDATE match_notifications SET seen=1 WHERE id=?', [req.params.id]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create a deal from a match notification
+router.post('/match-to-deal', authMiddleware, (req, res) => {
+  try {
+    const { notification_id, contact_id, property_id } = req.body;
+    if (!notification_id || !contact_id || !property_id) {
+      return res.status(400).json({ error: 'notification_id, contact_id, and property_id are required' });
+    }
+
+    // Verify notification exists
+    const mn = get('SELECT * FROM match_notifications WHERE id = ?', [notification_id]);
+    if (!mn) return res.status(404).json({ error: 'Match notification not found' });
+
+    // Get contact and property details
+    const contact = get("SELECT first_name || ' ' || last_name as name FROM contacts WHERE id = ?", [contact_id]);
+    const property = get('SELECT address, city, price FROM properties WHERE id = ?', [property_id]);
+    if (!contact || !property) {
+      return res.status(404).json({ error: 'Contact or property not found' });
+    }
+
+    // Create the deal
+    const dealId = uuidv4();
+    const title = `${contact.name} — ${property.address}`;
+    const value = property.price || 0;
+    const commRate = 2.0;
+    const commValue = Math.round(value * commRate / 100);
+    const now = new Date().toISOString();
+
+    run(`INSERT INTO deals (id, title, contact_id, property_id, stage, value, commission_rate, commission_value, source, assigned_to, priority, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 1, ?, ?, ?, 'Smart Match', ?, 'בינוני', ?, ?)`,
+      [dealId, title, contact_id, property_id, value, commRate, commValue, req.user.name, now, now]);
+
+    // Timeline entry
+    const tlId = uuidv4();
+    run(`INSERT INTO timeline (id, deal_id, type, title, description, created_by, created_at)
+      VALUES (?, ?, 'created', 'עסקה נוצרה', 'נוצרה מהתאמה חכמה — ניקוד ${mn.score}', ?, ?)`,
+      [tlId, dealId, req.user.name, now]);
+
+    // Update match notification status
+    run("UPDATE match_notifications SET status='deal_created', seen=1 WHERE id=?", [notification_id]);
+
+    const deal = get('SELECT * FROM deals WHERE id = ?', [dealId]);
+    res.status(201).json({ deal_id: dealId, deal });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
