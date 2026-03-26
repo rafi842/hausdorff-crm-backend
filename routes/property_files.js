@@ -21,20 +21,20 @@ const upload = multer({
   storage,
   limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
   fileFilter: (req, file, cb) => {
-    const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc'];
+    const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.docx', '.doc', '.xlsx', '.xls'];
     const ext = path.extname(file.originalname).toLowerCase();
     cb(null, allowed.includes(ext));
   }
 });
 
-// GET /api/property-files/:propertyId
-router.get('/:propertyId', authMiddleware, (req, res) => {
+// GET /api/property-files/list/:propertyId — list files for a property
+router.get('/list/:propertyId', authMiddleware, (req, res) => {
   try {
     res.json(all('SELECT * FROM property_files WHERE property_id=? ORDER BY uploaded_at DESC', [req.params.propertyId]));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /api/property-files/:propertyId/upload
+// POST /api/property-files/:propertyId/upload — upload file
 router.post('/:propertyId/upload', authMiddleware, upload.single('file'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -49,7 +49,20 @@ router.post('/:propertyId/upload', authMiddleware, upload.single('file'), (req, 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// DELETE /api/property-files/:id
+// GET /api/property-files/:id/download — download file
+router.get('/:id/download', authMiddleware, (req, res) => {
+  try {
+    const file = get('SELECT * FROM property_files WHERE id=?', [req.params.id]);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+    const filePath = path.join(UPLOADS_DIR, file.file_name);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on disk' });
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.original_name)}`);
+    res.setHeader('Content-Type', file.file_type || 'application/octet-stream');
+    res.sendFile(filePath);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/property-files/:id — delete file
 router.delete('/:id', authMiddleware, (req, res) => {
   try {
     const file = get('SELECT * FROM property_files WHERE id=?', [req.params.id]);
