@@ -98,7 +98,8 @@ app.use('/api/meetings', require('./routes/meetings'));
 app.use('/api/leads', require('./routes/leads'));
 
 // Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
+app.use('/uploads', express.static(uploadsDir));
 
 // Property files upload route
 app.use('/api/property-files', require('./routes/property_files'));

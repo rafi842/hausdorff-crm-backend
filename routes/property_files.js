@@ -7,7 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware } = require('../middleware/auth');
 
-const UPLOADS_DIR = path.join(__dirname, '..', 'uploads');
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
@@ -46,6 +46,19 @@ router.post('/:propertyId/upload', authMiddleware, upload.single('file'), (req, 
        `/uploads/${req.file.filename}`, req.file.mimetype,
        category || 'מסמכים נוספים', req.file.size, now]);
     res.status(201).json(get('SELECT * FROM property_files WHERE id=?', [id]));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/property-files/:id/preview — view file inline (no download)
+router.get('/:id/preview', authMiddleware, (req, res) => {
+  try {
+    const file = get('SELECT * FROM property_files WHERE id=?', [req.params.id]);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+    const filePath = path.join(UPLOADS_DIR, file.file_name);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on disk' });
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Content-Type', file.file_type || 'application/octet-stream');
+    res.sendFile(filePath);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
