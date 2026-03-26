@@ -92,15 +92,18 @@ router.post('/create-event', authMiddleware, async (req, res) => {
     });
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-    const { summary, description, start, end } = req.body;
+    const { summary, description, start, end, location, attendees } = req.body;
 
     const event = await calendar.events.insert({
       calendarId: 'primary',
+      sendUpdates: 'all',
       requestBody: {
         summary,
         description,
-        start: { dateTime: start },
-        end: { dateTime: end }
+        location: location || '',
+        start: { dateTime: start, timeZone: 'Asia/Jerusalem' },
+        end: { dateTime: end, timeZone: 'Asia/Jerusalem' },
+        attendees: (attendees || []).map(email => ({ email })),
       }
     });
 
@@ -141,6 +144,51 @@ router.post('/disconnect', authMiddleware, (req, res) => {
     `, [req.user.id]);
 
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /generate-ics - Generate ICS file (fallback without Google)
+router.post('/generate-ics', authMiddleware, (req, res) => {
+  try {
+    const { summary, description, start, end, location, attendees } = req.body;
+    if (!summary || !start || !end) {
+      return res.status(400).json({ error: 'summary, start, and end are required' });
+    }
+
+    const fmtDate = (d) => new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+    const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@hausdorff-crm`;
+
+    let ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Hausdorff CRM//Meeting//HE',
+      'CALSCALE:GREGORIAN',
+      'METHOD:REQUEST',
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTART:${fmtDate(start)}`,
+      `DTEND:${fmtDate(end)}`,
+      `SUMMARY:${(summary || '').replace(/\n/g, '\\n')}`,
+      `DESCRIPTION:${(description || '').replace(/\n/g, '\\n')}`,
+    ];
+
+    if (location) ics.push(`LOCATION:${location.replace(/\n/g, '\\n')}`);
+    if (attendees && attendees.length > 0) {
+      attendees.forEach(email => {
+        ics.push(`ATTENDEE;RSVP=TRUE:mailto:${email}`);
+      });
+    }
+    ics.push(`ORGANIZER:mailto:${req.user.email || 'noreply@hausdorff.co.il'}`);
+    ics.push('STATUS:CONFIRMED');
+    ics.push('END:VEVENT');
+    ics.push('END:VCALENDAR');
+
+    const content = ics.join('\r\n');
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="meeting-${Date.now()}.ics"`);
+    res.send(content);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

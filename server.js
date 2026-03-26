@@ -94,6 +94,7 @@ app.use('/api/proposals', require('./routes/proposals'));
 app.use('/api/activities', require('./routes/activities'));
 app.use('/api/goals', require('./routes/goals'));
 app.use('/api/calendar', require('./routes/calendar'));
+app.use('/api/meetings', require('./routes/meetings'));
 app.use('/api/leads', require('./routes/leads'));
 
 // Serve uploaded files

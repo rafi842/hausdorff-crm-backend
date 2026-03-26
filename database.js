@@ -312,6 +312,36 @@ async function initializeDatabase() {
     db.run("ALTER TABLE match_notifications ADD COLUMN status TEXT DEFAULT 'new'");
   }
 
+  // ── Meetings ───────────────────────────────────────────────────────────────
+  db.run(`
+    CREATE TABLE IF NOT EXISTS meetings (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      start_datetime TEXT NOT NULL,
+      end_datetime TEXT NOT NULL,
+      location TEXT DEFAULT '',
+      contact_id TEXT,
+      deal_id TEXT,
+      google_event_id TEXT DEFAULT '',
+      google_event_link TEXT DEFAULT '',
+      status TEXT DEFAULT 'scheduled',
+      created_by TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+  db.run(`
+    CREATE TABLE IF NOT EXISTS meeting_attendees (
+      id TEXT PRIMARY KEY,
+      meeting_id TEXT NOT NULL,
+      email TEXT NOT NULL,
+      name TEXT DEFAULT '',
+      type TEXT DEFAULT 'client',
+      rsvp_status TEXT DEFAULT 'pending',
+      FOREIGN KEY (meeting_id) REFERENCES meetings(id)
+    );
+  `);
+
   // ── Proposals ──────────────────────────────────────────────────────────────
   db.run(`
     CREATE TABLE IF NOT EXISTS proposals (
