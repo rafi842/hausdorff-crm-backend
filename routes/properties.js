@@ -110,4 +110,67 @@ router.delete('/:id', authMiddleware, (req, res) => {
   }
 });
 
+// POST smart match for property — find matching contacts
+router.post('/:id/smart-match', authMiddleware, (req, res) => {
+  try {
+    const prop = get('SELECT * FROM properties WHERE id = ?', [req.params.id]);
+    if (!prop) return res.status(404).json({ error: 'Property not found' });
+
+    const contacts = all(`SELECT * FROM contacts WHERE status = 'פעיל'`);
+
+    const scored = contacts.map(contact => {
+      let score = 0;
+      const reasons = [];
+      const preferredAreas = JSON.parse(contact.preferred_areas || '[]');
+
+      // Location (40 pts)
+      if (preferredAreas.length > 0 && preferredAreas.some(a => (prop.city||'').includes(a) || (prop.neighborhood||'').includes(a))) {
+        score += 40; reasons.push('מיקום מתאים');
+      }
+
+      // Price (30 pts)
+      if (contact.budget_min > 0 || contact.budget_max > 0) {
+        if (prop.price >= (contact.budget_min || 0) && (contact.budget_max === 0 || prop.price <= contact.budget_max)) {
+          score += 30; reasons.push('מחיר בטווח התקציב');
+        } else if (contact.budget_max > 0 && prop.price <= contact.budget_max * 1.1) {
+          score += 15; reasons.push('מחיר קרוב לתקציב');
+        }
+      } else { score += 15; }
+
+      // Area (15 pts)
+      if (contact.min_area > 0 || contact.max_area > 0) {
+        if (prop.area >= (contact.min_area || 0) && (contact.max_area === 0 || prop.area <= contact.max_area)) {
+          score += 15; reasons.push('גודל מתאים');
+        }
+      } else { score += 10; }
+
+      // Rooms (15 pts)
+      if (contact.min_rooms > 0 || contact.max_rooms > 0) {
+        if (prop.rooms >= (contact.min_rooms || 0) && (contact.max_rooms === 0 || prop.rooms <= contact.max_rooms)) {
+          score += 15; reasons.push('מספר חדרים מתאים');
+        }
+      } else { score += 10; }
+
+      // Yield match
+      if (contact.desired_yield > 0 && prop.annual_yield >= contact.desired_yield) {
+        score = Math.max(score, 80);
+        reasons.push(`תשואה ${prop.annual_yield}% >= ${contact.desired_yield}% המבוקש`);
+      }
+
+      return {
+        id: contact.id,
+        name: `${contact.first_name} ${contact.last_name}`,
+        phone: contact.phone, email: contact.email, type: contact.type,
+        budget_min: contact.budget_min, budget_max: contact.budget_max,
+        match_score: score, match_reasons: reasons,
+      };
+    });
+
+    scored.sort((a, b) => b.match_score - a.match_score);
+    res.json(scored.filter(c => c.match_score >= 50));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
