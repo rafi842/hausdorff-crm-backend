@@ -484,6 +484,8 @@ function runMigrations() {
     `ALTER TABLE properties ADD COLUMN deal_type TEXT DEFAULT 'מכירה'`,
     // Contacts - last_contacted_at
     `ALTER TABLE contacts ADD COLUMN last_contacted_at TEXT DEFAULT ''`,
+    // Properties - owner linking
+    `ALTER TABLE properties ADD COLUMN owner_id TEXT DEFAULT NULL`,
   ];
 
   migrations.forEach(sql => {
