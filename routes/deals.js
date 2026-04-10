@@ -40,6 +40,42 @@ router.get('/', authMiddleware, (req, res) => {
   }
 });
 
+// At-risk deals: stuck 14+ days OR in negotiation (stage 5-6) with no recent activity (48h+)
+router.get('/at-risk', authMiddleware, (req, res) => {
+  try {
+    const deals = all(`
+      SELECT d.*,
+        c.first_name || ' ' || c.last_name as contact_name,
+        c.phone as contact_phone,
+        p.address as property_address,
+        p.city as property_city,
+        CAST((julianday('now') - julianday(d.updated_at)) AS INTEGER) as days_stale,
+        (SELECT MAX(created_at) FROM activities
+         WHERE entity_type='deal' AND entity_id=d.id) as last_activity_at
+      FROM deals d
+      LEFT JOIN contacts c ON d.contact_id = c.id
+      LEFT JOIN properties p ON d.property_id = p.id
+      WHERE d.stage BETWEEN 1 AND 7
+      AND (
+        (julianday('now') - julianday(d.updated_at)) >= 14
+        OR (d.stage IN (5, 6) AND (
+          (SELECT MAX(created_at) FROM activities
+           WHERE entity_type='deal' AND entity_id=d.id) IS NULL
+          OR (julianday('now') - julianday(
+            (SELECT MAX(created_at) FROM activities
+             WHERE entity_type='deal' AND entity_id=d.id)
+          )) >= 2
+        ))
+      )
+      ORDER BY days_stale DESC
+      LIMIT 20
+    `);
+    res.json(deals);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/:id', authMiddleware, (req, res) => {
   try {
     const deal = get(`

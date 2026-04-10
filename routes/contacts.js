@@ -34,6 +34,24 @@ router.get('/', authMiddleware, (req, res) => {
   }
 });
 
+// GET hot leads — new leads not contacted in >N hours
+router.get('/hot-leads', authMiddleware, (req, res) => {
+  try {
+    const hours = parseInt(req.query.hours) || 24;
+    const leads = all(`
+      SELECT c.* FROM contacts c
+      WHERE c.status = 'חדש'
+      AND (c.last_contacted_at IS NULL OR c.last_contacted_at = '')
+      AND (julianday('now') - julianday(c.created_at)) * 24 >= ?
+      ORDER BY c.created_at ASC
+      LIMIT 20
+    `, [hours]);
+    res.json(leads);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET single contact
 router.get('/:id', authMiddleware, (req, res) => {
   try {
