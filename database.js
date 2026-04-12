@@ -486,6 +486,14 @@ function runMigrations() {
     `ALTER TABLE contacts ADD COLUMN last_contacted_at TEXT DEFAULT ''`,
     // Properties - owner linking
     `ALTER TABLE properties ADD COLUMN owner_id TEXT DEFAULT NULL`,
+    // Contacts - full profile for Smart Match
+    `ALTER TABLE contacts ADD COLUMN preferred_deal_type TEXT DEFAULT 'שניהם'`,
+    `ALTER TABLE contacts ADD COLUMN usage_purpose TEXT DEFAULT ''`,
+    `ALTER TABLE contacts ADD COLUMN desired_entry_date TEXT DEFAULT ''`,
+    `ALTER TABLE contacts ADD COLUMN min_parking INTEGER DEFAULT 0`,
+    `ALTER TABLE contacts ADD COLUMN preferred_floor TEXT DEFAULT 'לא משנה'`,
+    `ALTER TABLE contacts ADD COLUMN readiness_level TEXT DEFAULT 'מחפש פעיל'`,
+    `ALTER TABLE contacts ADD COLUMN contact_role TEXT DEFAULT ''`,
   ];
 
   migrations.forEach(sql => {

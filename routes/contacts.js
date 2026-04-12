@@ -175,7 +175,15 @@ router.post('/:id/smart-match', authMiddleware, (req, res) => {
     const preferredAreas = JSON.parse(contact.preferred_areas || '[]');
     const preferredTypes = JSON.parse(contact.preferred_property_types || '[]');
 
-    const scored = properties.map(prop => {
+    const scored = properties.filter(prop => {
+      // Pre-filter by deal type preference
+      if (contact.preferred_deal_type && contact.preferred_deal_type !== 'שניהם' && prop.deal_type && prop.deal_type !== contact.preferred_deal_type) return false;
+      // Pre-filter by contact type
+      if (contact.type === 'שוכר פוטנציאלי' && prop.deal_type && prop.deal_type !== 'השכרה') return false;
+      if (contact.type === 'רוכש פוטנציאלי' && prop.deal_type && prop.deal_type !== 'מכירה') return false;
+      if (contact.type === 'משקיע' && !prop.annual_yield) return false;
+      return true;
+    }).map(prop => {
       let score = 0;
       const reasons = [];
       let isYieldMatch = false;
@@ -218,6 +226,21 @@ router.post('/:id/smart-match', authMiddleware, (req, res) => {
         score = Math.max(score, 80);
         reasons.push(`תשואה ${prop.annual_yield}% >= ${contact.desired_yield}% המבוקש`);
         isYieldMatch = true;
+      }
+
+      // Parking (5 pts bonus)
+      if (contact.min_parking > 0 && prop.parking >= contact.min_parking) {
+        score += 5; reasons.push('חניות מתאימות');
+      }
+
+      // Floor preference (5 pts bonus)
+      if (contact.preferred_floor === 'גבוהה' && prop.floor >= 5) { score += 5; reasons.push('קומה גבוהה'); }
+      else if (contact.preferred_floor === 'נמוכה' && prop.floor > 0 && prop.floor <= 2) { score += 5; reasons.push('קומה נמוכה'); }
+      else if (contact.preferred_floor === 'קרקע' && prop.floor === 0) { score += 5; reasons.push('קומת קרקע'); }
+
+      // Deal type match
+      if (contact.preferred_deal_type && contact.preferred_deal_type !== 'שניהם' && prop.deal_type === contact.preferred_deal_type) {
+        reasons.push(`סוג עסקה: ${prop.deal_type}`);
       }
 
       return { ...prop, match_score: score, match_reasons: reasons, is_match: score >= 80, is_yield_match: isYieldMatch };
