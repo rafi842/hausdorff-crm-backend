@@ -494,6 +494,17 @@ function runMigrations() {
     `ALTER TABLE contacts ADD COLUMN preferred_floor TEXT DEFAULT 'לא משנה'`,
     `ALTER TABLE contacts ADD COLUMN readiness_level TEXT DEFAULT 'מחפש פעיל'`,
     `ALTER TABLE contacts ADD COLUMN contact_role TEXT DEFAULT ''`,
+    // Facebook Lead Ads tracking
+    `ALTER TABLE contacts ADD COLUMN facebook_lead_id TEXT DEFAULT ''`,
+    `ALTER TABLE contacts ADD COLUMN facebook_form_id TEXT DEFAULT ''`,
+    `ALTER TABLE contacts ADD COLUMN facebook_form_name TEXT DEFAULT ''`,
+    `ALTER TABLE contacts ADD COLUMN facebook_ad_id TEXT DEFAULT ''`,
+    `ALTER TABLE contacts ADD COLUMN facebook_ad_name TEXT DEFAULT ''`,
+    `ALTER TABLE contacts ADD COLUMN facebook_adset_name TEXT DEFAULT ''`,
+    `ALTER TABLE contacts ADD COLUMN facebook_campaign_id TEXT DEFAULT ''`,
+    `ALTER TABLE contacts ADD COLUMN facebook_campaign_name TEXT DEFAULT ''`,
+    `ALTER TABLE contacts ADD COLUMN facebook_platform TEXT DEFAULT ''`,
+    `ALTER TABLE contacts ADD COLUMN facebook_lead_data TEXT DEFAULT ''`,
   ];
 
   migrations.forEach(sql => {

@@ -21,14 +21,55 @@ router.get('/webhook', (req, res) => {
   }
 });
 
+// Helper: parse custom fields from Facebook form into structured CRM fields
+function parseCustomFields(customFields) {
+  if (!customFields || typeof customFields !== 'object') return {};
+  const mapped = {};
+  for (const [rawKey, rawValue] of Object.entries(customFields)) {
+    const k = String(rawKey).toLowerCase();
+    const v = Array.isArray(rawValue) ? String(rawValue[0] || '') : String(rawValue || '');
+    if (!v) continue;
+    if (k.includes('תקציב') || k.includes('budget')) {
+      const num = parseInt(v.replace(/\D/g, '')) || 0;
+      if (num > 0) mapped.budget_max = num;
+    } else if (k.includes('איזור') || k.includes('אזור') || k.includes('area') || k.includes('עיר') || k.includes('city')) {
+      mapped.preferred_areas = JSON.stringify([v]);
+    } else if (k.includes('סוג נכס') || k.includes('property type') || k.includes('property_type')) {
+      mapped.preferred_property_types = JSON.stringify([v]);
+    } else if (k.includes('הערות') || k.includes('notes') || k.includes('message')) {
+      mapped.notes = v;
+    }
+  }
+  return mapped;
+}
+
 // POST /webhook - Receive lead from Facebook/Google Ads (PUBLIC - NO AUTH)
 router.post('/webhook', (req, res) => {
   try {
     const {
+      // Existing fields
       name, phone, email, source,
       campaign_name, form_name, ad_id,
-      utm_source, utm_medium, utm_campaign
+      utm_source, utm_medium, utm_campaign,
+      // Facebook-specific fields
+      facebook_lead_id, facebook_form_id, facebook_form_name,
+      facebook_ad_id, facebook_ad_name, facebook_adset_name,
+      facebook_campaign_id, facebook_campaign_name, facebook_platform,
+      // Custom fields from Lead Form (key-value)
+      custom_fields,
     } = req.body;
+
+    // Deduplication: same facebook_lead_id = same lead
+    if (facebook_lead_id) {
+      const existing = get('SELECT id FROM contacts WHERE facebook_lead_id = ?', [facebook_lead_id]);
+      if (existing) {
+        const logId = uuidv4();
+        run(`INSERT INTO webhook_logs (id, source, payload, status)
+             VALUES (?, ?, ?, 'duplicate')`,
+          [logId, source || 'facebook', JSON.stringify(req.body)]);
+        return res.json({ success: true, id: existing.id, duplicate: true });
+      }
+    }
 
     const contactId = uuidv4();
 
@@ -37,6 +78,9 @@ router.post('/webhook', (req, res) => {
     const firstName = nameParts[0] || '';
     const lastName = nameParts.slice(1).join(' ') || '';
 
+    // Parse custom fields → structured CRM fields
+    const fromCustom = parseCustomFields(custom_fields);
+
     // Find assignment rule for this source
     let assignedAgent = '';
     const sourceStr = source || utm_source || '';
@@ -44,7 +88,6 @@ router.post('/webhook', (req, res) => {
       const rule = get('SELECT * FROM lead_assignment_rules WHERE source = ?', [sourceStr]);
       if (rule) {
         if (rule.use_round_robin) {
-          // Round-robin: find agent with fewest recent leads
           const agents = all(`SELECT id, name FROM users WHERE role = 'agent'`);
           if (agents.length > 0) {
             let minCount = Infinity;
@@ -64,27 +107,42 @@ router.post('/webhook', (req, res) => {
             assignedAgent = selectedAgent.name;
           }
         } else if (rule.assigned_agent) {
-          // Direct assignment
           const agent = get('SELECT name FROM users WHERE id = ?', [rule.assigned_agent]);
           assignedAgent = agent ? agent.name : rule.assigned_agent;
         }
       }
     }
 
-    // Create contact
+    // Resolve final values (custom_fields take priority where they exist)
+    const finalPhone = fromCustom.phone || phone || '';
+    const finalNotes = (fromCustom.notes || '') + (assignedAgent ? `\nassigned:${assignedAgent}` : '');
+    const finalBudgetMax = fromCustom.budget_max || 0;
+    const finalAreas = fromCustom.preferred_areas || '[]';
+    const finalTypes = fromCustom.preferred_property_types || '[]';
+
+    // Create contact with all fields
     run(`
       INSERT INTO contacts (
         id, first_name, last_name, email, phone, type, contact_category, lead_status,
-        source, status, utm_source, utm_medium, utm_campaign, lead_source_detail, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        source, status, utm_source, utm_medium, utm_campaign, lead_source_detail, notes,
+        budget_max, preferred_areas, preferred_property_types,
+        facebook_lead_id, facebook_form_id, facebook_form_name,
+        facebook_ad_id, facebook_ad_name, facebook_adset_name,
+        facebook_campaign_id, facebook_campaign_name, facebook_platform, facebook_lead_data
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       contactId, firstName, lastName,
-      email || '', phone || '',
+      email || '', finalPhone,
       'קונה', 'lead', 'חדש',
       sourceStr || 'webhook', 'פעיל',
       utm_source || '', utm_medium || '', utm_campaign || '',
-      [campaign_name, form_name, ad_id].filter(Boolean).join(' | '),
-      assignedAgent ? `assigned:${assignedAgent}` : ''
+      [campaign_name || facebook_campaign_name, form_name || facebook_form_name, ad_id || facebook_ad_id].filter(Boolean).join(' | '),
+      finalNotes.trim(),
+      finalBudgetMax, finalAreas, finalTypes,
+      facebook_lead_id || '', facebook_form_id || '', facebook_form_name || '',
+      facebook_ad_id || '', facebook_ad_name || '', facebook_adset_name || '',
+      facebook_campaign_id || '', facebook_campaign_name || '', facebook_platform || '',
+      custom_fields ? JSON.stringify(custom_fields) : ''
     ]);
 
     // Log to webhook_logs
