@@ -431,6 +431,54 @@ async function initializeDatabase() {
     );
   `);
 
+  // ── WhatsApp Logs ──────────────────────────────────────────────────────────
+  // Every inbound/outbound WhatsApp message, used for dedup + audit + undo
+  db.run(`
+    CREATE TABLE IF NOT EXISTS whatsapp_logs (
+      id TEXT PRIMARY KEY,
+      direction TEXT NOT NULL,
+      user_id TEXT,
+      wa_phone TEXT NOT NULL,
+      wa_message_id TEXT DEFAULT '',
+      message_type TEXT NOT NULL,
+      text_content TEXT DEFAULT '',
+      media_url TEXT DEFAULT '',
+      status TEXT DEFAULT 'received',
+      error_message TEXT DEFAULT '',
+      raw_payload TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  // ── WhatsApp Pending Actions ───────────────────────────────────────────────
+  // Proposed actions waiting for user approval (when LLM confidence < 90%)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS whatsapp_pending_actions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      inbound_log_id TEXT NOT NULL,
+      actions_json TEXT NOT NULL,
+      overall_confidence INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'pending',
+      expires_at TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  // ── WhatsApp Undo Log ──────────────────────────────────────────────────────
+  // Inverse operations stored after auto-save, allow "בטל" within 1 hour
+  db.run(`
+    CREATE TABLE IF NOT EXISTS whatsapp_undo_log (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      inbound_log_id TEXT NOT NULL,
+      reverse_ops_json TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
   saveDb();
 
   // ── Run migrations for existing DB ─────────────────────────────────────────
@@ -505,6 +553,10 @@ function runMigrations() {
     `ALTER TABLE contacts ADD COLUMN facebook_campaign_name TEXT DEFAULT ''`,
     `ALTER TABLE contacts ADD COLUMN facebook_platform TEXT DEFAULT ''`,
     `ALTER TABLE contacts ADD COLUMN facebook_lead_data TEXT DEFAULT ''`,
+    // Users - WhatsApp linkage (E.164 phone, opt-in flag, opt-in timestamp)
+    `ALTER TABLE users ADD COLUMN whatsapp_phone TEXT DEFAULT ''`,
+    `ALTER TABLE users ADD COLUMN whatsapp_enabled INTEGER DEFAULT 0`,
+    `ALTER TABLE users ADD COLUMN whatsapp_opt_in_at TEXT DEFAULT ''`,
   ];
 
   migrations.forEach(sql => {
