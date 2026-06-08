@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminOnly } = require('../middleware/auth');
 
 // GET attachments for an entity
 router.get('/', authMiddleware, (req, res) => {
@@ -34,7 +34,7 @@ router.post('/', authMiddleware, (req, res) => {
 });
 
 // DELETE attachment
-router.delete('/:id', authMiddleware, (req, res) => {
+router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
   try {
     run('DELETE FROM attachments WHERE id=?', [req.params.id]);
     res.json({ success: true });

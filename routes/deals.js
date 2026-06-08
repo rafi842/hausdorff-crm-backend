@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminOnly } = require('../middleware/auth');
 
 const STAGE_NAMES = {
   1: 'פנייה נכנסת', 2: 'בדיקת היתכנות', 3: 'נוצר קשר ראשוני', 4: 'סיור בנכס',
@@ -170,7 +170,7 @@ router.patch('/:id/stage', authMiddleware, (req, res) => {
   }
 });
 
-router.delete('/:id', authMiddleware, (req, res) => {
+router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
   try {
     run('DELETE FROM timeline WHERE deal_id = ?', [req.params.id]);
     run('DELETE FROM tasks WHERE deal_id = ?', [req.params.id]);

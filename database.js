@@ -557,6 +557,8 @@ function runMigrations() {
     `ALTER TABLE users ADD COLUMN whatsapp_phone TEXT DEFAULT ''`,
     `ALTER TABLE users ADD COLUMN whatsapp_enabled INTEGER DEFAULT 0`,
     `ALTER TABLE users ADD COLUMN whatsapp_opt_in_at TEXT DEFAULT ''`,
+    // Per-user data scoping: owner of a contact/lead. NULL/'' = legacy/shared (visible to all).
+    `ALTER TABLE contacts ADD COLUMN owner_user_id TEXT DEFAULT ''`,
   ];
 
   migrations.forEach(sql => {

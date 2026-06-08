@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all, saveDb } = require('../database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminOnly } = require('../middleware/auth');
 
 // All routes require auth
 router.use(authMiddleware);
@@ -87,7 +87,7 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /:id - delete proposal
-router.delete('/:id', (req, res) => {
+router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
   try {
     const existing = get('SELECT id FROM proposals WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Proposal not found' });

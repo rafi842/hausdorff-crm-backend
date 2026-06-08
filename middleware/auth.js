@@ -23,4 +23,12 @@ function authMiddleware(req, res, next) {
   }
 }
 
-module.exports = { authMiddleware, JWT_SECRET };
+// Restrict a route to admins only. Must run AFTER authMiddleware (relies on req.user).
+function adminOnly(req, res, next) {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'אין הרשאה - פעולה זו זמינה למנהל בלבד' });
+  }
+  next();
+}
+
+module.exports = { authMiddleware, adminOnly, JWT_SECRET };

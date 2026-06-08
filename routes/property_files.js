@@ -5,7 +5,7 @@ const fs = require('fs');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminOnly } = require('../middleware/auth');
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -76,7 +76,7 @@ router.get('/:id/download', authMiddleware, (req, res) => {
 });
 
 // DELETE /api/property-files/:id — delete file
-router.delete('/:id', authMiddleware, (req, res) => {
+router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
   try {
     const file = get('SELECT * FROM property_files WHERE id=?', [req.params.id]);
     if (file) {

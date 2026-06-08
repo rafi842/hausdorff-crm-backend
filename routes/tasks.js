@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminOnly } = require('../middleware/auth');
 
 // Helper: enrich tasks with participants
 function attachParticipants(tasks) {
@@ -196,7 +196,7 @@ router.patch('/:id/complete', authMiddleware, (req, res) => {
   }
 });
 
-router.delete('/:id', authMiddleware, (req, res) => {
+router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
   try {
     run('DELETE FROM task_participants WHERE task_id = ?', [req.params.id]);
     run('DELETE FROM tasks WHERE id = ?', [req.params.id]);

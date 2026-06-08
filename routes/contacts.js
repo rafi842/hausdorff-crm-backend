@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminOnly } = require('../middleware/auth');
 
 // GET all contacts (or leads)
 router.get('/', authMiddleware, (req, res) => {
@@ -15,6 +15,12 @@ router.get('/', authMiddleware, (req, res) => {
       WHERE 1=1
     `;
     const params = [];
+
+    // Data scoping: non-admins see only their own records + legacy/unowned ones.
+    if (req.user.role !== 'admin') {
+      query += ` AND (c.owner_user_id = ? OR c.owner_user_id IS NULL OR c.owner_user_id = '')`;
+      params.push(req.user.id);
+    }
 
     if (search) {
       query += ` AND (c.first_name LIKE ? OR c.last_name LIKE ? OR c.email LIKE ? OR c.phone LIKE ?)`;
@@ -62,6 +68,10 @@ router.get('/:id', authMiddleware, (req, res) => {
       WHERE c.id = ?
     `, [req.params.id]);
     if (!contact) return res.status(404).json({ error: 'Contact not found' });
+    // Non-admins may only view their own or legacy/unowned records.
+    if (req.user.role !== 'admin' && contact.owner_user_id && contact.owner_user_id !== req.user.id) {
+      return res.status(403).json({ error: 'אין הרשאה' });
+    }
     res.json(contact);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -80,7 +90,9 @@ router.post('/', authMiddleware, (req, res) => {
     } = req.body;
 
     const now = new Date().toISOString();
-    run(`INSERT INTO contacts (id,first_name,last_name,email,phone,type,contact_category,lead_status,source,company_id,budget_min,budget_max,preferred_areas,preferred_property_types,min_rooms,max_rooms,min_area,max_area,desired_yield,notes,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    // New records are owned by their creator (so non-admins see only their own).
+    const owner_user_id = req.user.id;
+    run(`INSERT INTO contacts (id,first_name,last_name,email,phone,type,contact_category,lead_status,source,company_id,budget_min,budget_max,preferred_areas,preferred_property_types,min_rooms,max_rooms,min_area,max_area,desired_yield,notes,status,owner_user_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [id, first_name, last_name, email||'', phone||'', type||'קונה',
        contact_category||'contact', lead_status||'new',
        source||'ישיר', company_id||null,
@@ -88,7 +100,7 @@ router.post('/', authMiddleware, (req, res) => {
        JSON.stringify(Array.isArray(preferred_areas) ? preferred_areas : []),
        JSON.stringify(Array.isArray(preferred_property_types) ? preferred_property_types : []),
        min_rooms||0, max_rooms||0, min_area||0, max_area||0,
-       desired_yield||0, notes||'', status||'פעיל', now, now]);
+       desired_yield||0, notes||'', status||'פעיל', owner_user_id, now, now]);
 
     res.status(201).json(get(`
       SELECT c.*, comp.name as company_name FROM contacts c
@@ -101,6 +113,13 @@ router.post('/', authMiddleware, (req, res) => {
 // PUT update
 router.put('/:id', authMiddleware, (req, res) => {
   try {
+    // Non-admins may only edit their own or legacy/unowned records.
+    if (req.user.role !== 'admin') {
+      const existing = get('SELECT owner_user_id FROM contacts WHERE id = ?', [req.params.id]);
+      if (existing && existing.owner_user_id && existing.owner_user_id !== req.user.id) {
+        return res.status(403).json({ error: 'אין הרשאה' });
+      }
+    }
     const {
       first_name, last_name, email, phone, type, contact_category, lead_status,
       source, company_id,
@@ -139,8 +158,8 @@ router.patch('/:id/convert', authMiddleware, (req, res) => {
   }
 });
 
-// DELETE
-router.delete('/:id', authMiddleware, (req, res) => {
+// DELETE (admin only)
+router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
   try {
     run('DELETE FROM contacts WHERE id = ?', [req.params.id]);
     res.json({ success: true });

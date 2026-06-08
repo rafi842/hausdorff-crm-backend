@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all, getDb } = require('../database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminOnly } = require('../middleware/auth');
 
 // GET all activities
 router.get('/', authMiddleware, (req, res) => {
@@ -132,7 +132,7 @@ router.put('/:id', authMiddleware, (req, res) => {
 });
 
 // DELETE activity
-router.delete('/:id', authMiddleware, (req, res) => {
+router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
   try {
     const activity = get('SELECT * FROM activities WHERE id = ?', [req.params.id]);
     if (!activity) return res.status(404).json({ error: 'Activity not found' });

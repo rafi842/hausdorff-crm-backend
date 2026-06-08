@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminOnly } = require('../middleware/auth');
 
 // GET all meetings (with filters)
 router.get('/', authMiddleware, (req, res) => {
@@ -119,7 +119,7 @@ router.put('/:id', authMiddleware, (req, res) => {
 });
 
 // DELETE meeting
-router.delete('/:id', authMiddleware, (req, res) => {
+router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
   try {
     const existing = get('SELECT * FROM meetings WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Meeting not found' });

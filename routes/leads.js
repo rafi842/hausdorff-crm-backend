@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all, getDb } = require('../database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, adminOnly } = require('../middleware/auth');
 
 // GET /webhook - Facebook webhook verification (PUBLIC)
 router.get('/webhook', (req, res) => {
@@ -191,14 +191,14 @@ router.post('/import-csv', authMiddleware, (req, res) => {
         run(`
           INSERT INTO contacts (
             id, first_name, last_name, email, phone, type, contact_category, lead_status,
-            source, status, utm_source, lead_source_detail
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            source, status, utm_source, lead_source_detail, owner_user_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           id, firstName, lastName,
           lead.email || '', lead.phone || '',
           'קונה', 'lead', 'חדש',
           lead.source || 'csv-import', 'פעיל',
-          lead.source || '', lead.campaign || ''
+          lead.source || '', lead.campaign || '', req.user.id
         ]);
         imported++;
       } catch (e) {
@@ -311,7 +311,7 @@ router.put('/assignment-rules/:id', authMiddleware, (req, res) => {
 });
 
 // DELETE /assignment-rules/:id - Delete rule (AUTH REQUIRED, admin only)
-router.delete('/assignment-rules/:id', authMiddleware, (req, res) => {
+router.delete('/assignment-rules/:id', authMiddleware, adminOnly, (req, res) => {
   try {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Admin access required' });
