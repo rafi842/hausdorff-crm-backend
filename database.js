@@ -582,6 +582,15 @@ function runMigrations() {
     `ALTER TABLE properties ADD COLUMN rent_per_sqm INTEGER DEFAULT 0`,
     `ALTER TABLE properties ADD COLUMN management_fee INTEGER DEFAULT 0`,
     `ALTER TABLE properties ADD COLUMN is_anchor INTEGER DEFAULT 0`,
+    // Commercial-leasing: retail-chain fields on companies
+    `ALTER TABLE companies ADD COLUMN business_category TEXT DEFAULT ''`,
+    `ALTER TABLE companies ADD COLUMN business_subcategory TEXT DEFAULT ''`,
+    `ALTER TABLE companies ADD COLUMN branch_count INTEGER DEFAULT 0`,
+    `ALTER TABLE companies ADD COLUMN target_area_min INTEGER DEFAULT 0`,
+    `ALTER TABLE companies ADD COLUMN target_area_max INTEGER DEFAULT 0`,
+    `ALTER TABLE companies ADD COLUMN rent_budget_per_sqm INTEGER DEFAULT 0`,
+    `ALTER TABLE companies ADD COLUMN chain_status TEXT DEFAULT 'פוטנציאלי'`,
+    `ALTER TABLE companies ADD COLUMN expansion_notes TEXT DEFAULT ''`,
   ];
 
   migrations.forEach(sql => {
