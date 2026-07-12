@@ -67,8 +67,11 @@ const loginLimiter = rateLimit({
   skipSuccessfulRequests: true,
 });
 
-// Body parser
-app.use(express.json({ limit: '10mb' }));
+// Body parser — stash the raw body so webhook routes can verify HMAC signatures
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, buf) => { req.rawBody = buf; },
+}));
 
 // Request logger (dev only)
 if (!isProd) {

@@ -1,8 +1,25 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all, getDb } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+
+// Verify the Facebook webhook payload signature (X-Hub-Signature-256).
+// Active only when FACEBOOK_APP_SECRET is configured — set it to reject spoofed
+// leads. Returns true if the request should be allowed through.
+function verifyWebhookSignature(req) {
+  const appSecret = process.env.FACEBOOK_APP_SECRET;
+  if (!appSecret) return true; // not configured — preserve existing behaviour
+  const sig = req.get('X-Hub-Signature-256') || '';
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', appSecret)
+    .update(req.rawBody || Buffer.from(''))
+    .digest('hex');
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 // GET /webhook - Facebook webhook verification (PUBLIC)
 router.get('/webhook', (req, res) => {
@@ -43,9 +60,12 @@ function parseCustomFields(customFields) {
   return mapped;
 }
 
-// POST /webhook - Receive lead from Facebook/Google Ads (PUBLIC - NO AUTH)
+// POST /webhook - Receive lead from Facebook/Google Ads (PUBLIC — signature-verified when FACEBOOK_APP_SECRET is set)
 router.post('/webhook', (req, res) => {
   try {
+    if (!verifyWebhookSignature(req)) {
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
     const {
       // Existing fields
       name, phone, email, source,

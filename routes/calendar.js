@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
 const { run, get, all, getDb } = require('../database');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, JWT_SECRET } = require('../middleware/auth');
 
 // POST /auth - Generate OAuth2 URL
 router.post('/auth', authMiddleware, (req, res) => {
@@ -21,7 +22,9 @@ router.post('/auth', authMiddleware, (req, res) => {
       access_type: 'offline',
       prompt: 'consent',
       scope: ['https://www.googleapis.com/auth/calendar.events'],
-      state: req.user.id
+      // Signed, short-lived state binds the callback to this user and prevents
+      // an attacker from linking their Google account to someone else's record.
+      state: jwt.sign({ uid: req.user.id, p: 'gcal' }, JWT_SECRET, { expiresIn: '10m' })
     });
 
     res.json({ authUrl });
@@ -33,12 +36,23 @@ router.post('/auth', authMiddleware, (req, res) => {
 // GET /callback - OAuth callback
 router.get('/callback', async (req, res) => {
   try {
-    const { code, state: userId } = req.query;
+    const { code, state } = req.query;
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
     if (!clientId || !code) {
       return res.status(400).send('Missing configuration or code');
+    }
+
+    // Validate the signed state and recover the user id from it (never trust a
+    // raw user id in the callback query).
+    let userId;
+    try {
+      const decoded = jwt.verify(state, JWT_SECRET, { algorithms: ['HS256'] });
+      if (decoded.p !== 'gcal') throw new Error('unexpected state purpose');
+      userId = decoded.uid;
+    } catch (e) {
+      return res.status(400).send('Invalid or expired OAuth state');
     }
 
     const { google } = require('googleapis');
