@@ -14,6 +14,12 @@ const PORT = process.env.PORT || 3001;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const isProd = NODE_ENV === 'production';
 
+// Behind Railway's proxy there is exactly one hop; trust it so express-rate-limit
+// keys on the real client IP (X-Forwarded-For) instead of the proxy address.
+if (isProd) {
+  app.set('trust proxy', 1);
+}
+
 // ── Security Middleware ────────────────────────────────────────────────────────
 
 // Helmet: set secure HTTP headers

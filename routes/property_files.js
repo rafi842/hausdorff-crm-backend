@@ -10,6 +10,21 @@ const { authMiddleware, adminOnly } = require('../middleware/auth');
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
+// Derive Content-Type from the stored file extension — never trust the
+// client-supplied mimetype, which could be text/html/svg and be served inline
+// as an XSS vector. Only extensions on the upload allow-list can appear here.
+const CONTENT_TYPES = {
+  '.pdf': 'application/pdf',
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+  '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+function safeContentType(fileName) {
+  return CONTENT_TYPES[path.extname(fileName).toLowerCase()] || 'application/octet-stream';
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => {
@@ -57,7 +72,8 @@ router.get('/:id/preview', authMiddleware, (req, res) => {
     const filePath = path.join(UPLOADS_DIR, file.file_name);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on disk' });
     res.setHeader('Content-Disposition', 'inline');
-    res.setHeader('Content-Type', file.file_type || 'application/octet-stream');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Type', safeContentType(file.file_name));
     res.sendFile(filePath);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -70,7 +86,8 @@ router.get('/:id/download', authMiddleware, (req, res) => {
     const filePath = path.join(UPLOADS_DIR, file.file_name);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found on disk' });
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.original_name)}`);
-    res.setHeader('Content-Type', file.file_type || 'application/octet-stream');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Type', safeContentType(file.file_name));
     res.sendFile(filePath);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
