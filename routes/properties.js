@@ -63,7 +63,8 @@ router.post('/', authMiddleware, (req, res) => {
       price, area, rooms, floor, total_floors, parking, storage, balcony, elevator,
       description, land_use, zoning_plan, land_area_dunams,
       has_tenant, monthly_rent, annual_yield, tenant_name, lease_start_date, lease_end_date,
-      exclusivity, deal_type, owner_id
+      exclusivity, deal_type, owner_id,
+      unit_number, designated_category, frontage, rent_per_sqm, management_fee, is_anchor
     } = req.body;
     const now = new Date().toISOString();
     run(`INSERT INTO properties (id,project_id,address,city,neighborhood,type,status,price,area,rooms,floor,total_floors,parking,storage,balcony,elevator,description,land_use,zoning_plan,land_area_dunams,has_tenant,monthly_rent,annual_yield,tenant_name,lease_start_date,lease_end_date,exclusivity,deal_type,owner_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -74,6 +75,8 @@ router.post('/', authMiddleware, (req, res) => {
        has_tenant ? 1 : 0, monthly_rent||0, annual_yield||0,
        tenant_name||'', lease_start_date||'', lease_end_date||'',
        exclusivity ? 1 : 0, deal_type||'מכירה', owner_id||null, now, now]);
+    run(`UPDATE properties SET unit_number=?,designated_category=?,frontage=?,rent_per_sqm=?,management_fee=?,is_anchor=? WHERE id=?`,
+      [unit_number||'', designated_category||'', frontage||0, rent_per_sqm||0, management_fee||0, is_anchor ? 1 : 0, id]);
     res.status(201).json(get('SELECT * FROM properties WHERE id = ?', [id]));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -87,7 +90,8 @@ router.put('/:id', authMiddleware, (req, res) => {
       price, area, rooms, floor, total_floors, parking, storage, balcony, elevator,
       description, land_use, zoning_plan, land_area_dunams,
       has_tenant, monthly_rent, annual_yield, tenant_name, lease_start_date, lease_end_date,
-      exclusivity, deal_type, owner_id
+      exclusivity, deal_type, owner_id,
+      unit_number, designated_category, frontage, rent_per_sqm, management_fee, is_anchor
     } = req.body;
     const now = new Date().toISOString();
     run(`UPDATE properties SET project_id=?,address=?,city=?,neighborhood=?,type=?,status=?,price=?,area=?,rooms=?,floor=?,total_floors=?,parking=?,storage=?,balcony=?,elevator=?,description=?,land_use=?,zoning_plan=?,land_area_dunams=?,has_tenant=?,monthly_rent=?,annual_yield=?,tenant_name=?,lease_start_date=?,lease_end_date=?,exclusivity=?,deal_type=?,owner_id=?,updated_at=? WHERE id=?`,
@@ -98,6 +102,8 @@ router.put('/:id', authMiddleware, (req, res) => {
        has_tenant ? 1 : 0, monthly_rent||0, annual_yield||0,
        tenant_name||'', lease_start_date||'', lease_end_date||'',
        exclusivity ? 1 : 0, deal_type||'מכירה', owner_id||null, now, req.params.id]);
+    run(`UPDATE properties SET unit_number=?,designated_category=?,frontage=?,rent_per_sqm=?,management_fee=?,is_anchor=? WHERE id=?`,
+      [unit_number||'', designated_category||'', frontage||0, rent_per_sqm||0, management_fee||0, is_anchor ? 1 : 0, req.params.id]);
     res.json(get('SELECT * FROM properties WHERE id = ?', [req.params.id]));
   } catch (err) {
     res.status(500).json({ error: err.message });

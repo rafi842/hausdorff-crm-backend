@@ -575,6 +575,13 @@ function runMigrations() {
     `ALTER TABLE users ADD COLUMN whatsapp_opt_in_at TEXT DEFAULT ''`,
     // Per-user data scoping: owner of a contact/lead. NULL/'' = legacy/shared (visible to all).
     `ALTER TABLE contacts ADD COLUMN owner_user_id TEXT DEFAULT ''`,
+    // Commercial-leasing: unit fields for the tenant-mix model
+    `ALTER TABLE properties ADD COLUMN unit_number TEXT DEFAULT ''`,
+    `ALTER TABLE properties ADD COLUMN designated_category TEXT DEFAULT ''`,
+    `ALTER TABLE properties ADD COLUMN frontage REAL DEFAULT 0`,
+    `ALTER TABLE properties ADD COLUMN rent_per_sqm INTEGER DEFAULT 0`,
+    `ALTER TABLE properties ADD COLUMN management_fee INTEGER DEFAULT 0`,
+    `ALTER TABLE properties ADD COLUMN is_anchor INTEGER DEFAULT 0`,
   ];
 
   migrations.forEach(sql => {
