@@ -250,6 +250,27 @@ cron.schedule('0 2 * * *', runBackup, { timezone: 'Asia/Jerusalem' });
 
 // ── Start server ────────────────────────────────────────────────────────────
 initializeDatabase().then(() => {
+  // ── One-time admin password reset (env-gated, remove after use) ──────────────
+  // Set RESET_ADMIN_PASSWORD in the environment to reset the admin login, then
+  // unset it and delete this block. Idempotent: runs on every boot while set.
+  if (process.env.RESET_ADMIN_PASSWORD) {
+    try {
+      const bcrypt = require('bcryptjs');
+      const adminEmail = 'admin@hausdorff.co.il';
+      const admin = get('SELECT id FROM users WHERE email = ?', [adminEmail]);
+      if (admin) {
+        const hash = bcrypt.hashSync(process.env.RESET_ADMIN_PASSWORD, 10);
+        run('UPDATE users SET password_hash = ?, updated_at = ? WHERE email = ?',
+          [hash, new Date().toISOString(), adminEmail]);
+        console.log(`[Reset] Password for ${adminEmail} was reset via RESET_ADMIN_PASSWORD`);
+      } else {
+        console.log(`[Reset] No user ${adminEmail} found — nothing to reset`);
+      }
+    } catch (e) {
+      console.error('[Reset] Failed to reset admin password:', e.message);
+    }
+  }
+
   app.listen(PORT, () => {
     console.log(`\n  Real Estate CRM Backend`);
     console.log(`  Environment: ${NODE_ENV}`);
