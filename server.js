@@ -92,6 +92,7 @@ app.use('/api/auth', require('./routes/auth'));
 // Protected routes
 app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/companies', require('./routes/companies'));
+app.use('/api/categories', require('./routes/categories'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/properties', require('./routes/properties'));
 app.use('/api/deals', require('./routes/deals'));

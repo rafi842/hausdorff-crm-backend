@@ -479,10 +479,26 @@ async function initializeDatabase() {
     );
   `);
 
+  // ── Business Categories (tenant-mix taxonomy) ──────────────────────────────
+  // Hierarchical: parent_id NULL = main category, otherwise a sub-category.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS business_categories (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      parent_id TEXT DEFAULT NULL,
+      sort_order INTEGER DEFAULT 0,
+      active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
   saveDb();
 
   // ── Run migrations for existing DB ─────────────────────────────────────────
   runMigrations();
+
+  // ── Seed the business-category taxonomy (idempotent, every boot) ───────────
+  ensureCategories();
 
   // ── Seed check ─────────────────────────────────────────────────────────────
   const countRow = get('SELECT COUNT(*) as c FROM contacts');
@@ -619,6 +635,39 @@ function ensureDefaultUsers() {
     run(`INSERT OR IGNORE INTO users (id,name,email,password_hash,role) VALUES (?,?,?,?,?)`,
       [u.id, u.name, u.email, hash, u.role]);
   });
+}
+
+// Tenant-mix taxonomy for commercial-center leasing: 12 main categories + subs.
+const CATEGORY_TREE = [
+  { name: 'אופנה והלבשה', subs: ['אופנת נשים', 'אופנת גברים', 'אופנת ילדים', 'מוצרי תינוקות', 'הלבשה תחתונה', 'בגדי הריון', 'סלון כלות וערב', 'אקססוריז'] },
+  { name: 'הנעלה', subs: ['נעלי נשים', 'נעלי גברים', 'נעלי ילדים'] },
+  { name: 'תכשיטים ושעונים', subs: ['תכשיטי זהב', 'תכשיטי כסף', 'שעונים'] },
+  { name: 'יופי, טיפוח ואופטיקה', subs: ['מכוני יופי', 'פאות נשים', 'אופטיקה ומשקפיים'] },
+  { name: 'בריאות ורפואה', subs: ['קופות חולים', 'מרפאות', 'מרפאת שיניים', 'אורטופדיה', 'בית טבע'] },
+  { name: 'הסעדה', subs: ['מסעדות', 'מזון מהיר', 'אוכל מוכן'] },
+  { name: 'מזון ומעדנייה', subs: ['סופרמרקט', 'מאפיות', 'איטליז', 'חנות יין', 'שוקולד ומתוקים', 'פיצוחים'] },
+  { name: 'בית, ריהוט ומטבח', subs: ['ריהוט', 'מזרנים', 'מטבחים', 'כלי בית', 'כלי מטבח', 'כלי כסף', 'טקסטיל לבית ווילונות', 'תאורה'] },
+  { name: 'חשמל ואלקטרוניקה', subs: ['מוצרי חשמל', 'מחשבים'] },
+  { name: 'מתנות, יודאיקה ופנאי', subs: ['מתנות', 'יודאיקה', 'תשמישי קדושה', 'פרחים', 'צעצועים'] },
+  { name: 'ספורט וכושר', subs: ['מכון כושר'] },
+  { name: 'שירותים', subs: ['בנקים', 'ניקוי יבש', 'השכרת רכב', 'אולם תצוגת רכב', 'כלי חד פעמי ואירועים', 'חנות נוחות', 'מכללות והשכלה'] },
+];
+
+// Idempotent: fixed ids + INSERT OR IGNORE, so re-running never duplicates and
+// never overwrites user edits/additions. Runs on every boot.
+function ensureCategories() {
+  try {
+    CATEGORY_TREE.forEach((main, i) => {
+      const mainId = `bc-${i}`;
+      db.run(`INSERT OR IGNORE INTO business_categories (id,name,parent_id,sort_order) VALUES (?,?,NULL,?)`, [mainId, main.name, i]);
+      main.subs.forEach((sub, j) => {
+        db.run(`INSERT OR IGNORE INTO business_categories (id,name,parent_id,sort_order) VALUES (?,?,?,?)`, [`${mainId}-${j}`, sub, mainId, j]);
+      });
+    });
+    saveDb();
+  } catch (e) {
+    console.error('[Categories] seed error:', e.message);
+  }
 }
 
 function seedDatabase() {
