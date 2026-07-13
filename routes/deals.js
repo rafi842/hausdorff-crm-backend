@@ -5,8 +5,8 @@ const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
 
 const STAGE_NAMES = {
-  1: 'פנייה נכנסת', 2: 'בדיקת היתכנות', 3: 'נוצר קשר ראשוני', 4: 'סיור בנכס',
-  5: 'נשלחה הצעת מחיר', 6: 'משא ומתן', 7: 'הסכם לחתימה', 8: 'עסקה נסגרה', 9: 'עסקה אבדה'
+  1: 'פנייה', 2: 'גילוי עניין', 3: 'פגישה', 4: 'הצעה / עקרונות',
+  5: 'מו"מ חוזה', 6: 'חתום', 7: 'לא רלוונטי'
 };
 
 router.get('/', authMiddleware, (req, res) => {
@@ -55,7 +55,7 @@ router.get('/at-risk', authMiddleware, (req, res) => {
       FROM deals d
       LEFT JOIN contacts c ON d.contact_id = c.id
       LEFT JOIN properties p ON d.property_id = p.id
-      WHERE d.stage BETWEEN 1 AND 7
+      WHERE d.stage BETWEEN 1 AND 5
       AND (
         (julianday('now') - julianday(d.updated_at)) >= 14
         OR (d.stage IN (5, 6) AND (

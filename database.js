@@ -628,6 +628,9 @@ function runMigrations() {
     `UPDATE deals SET source = 'פנייה ישירה' WHERE source = 'ישיר'`,
     `UPDATE deals SET source = 'מודעת נכס (יד2 / מדלן)' WHERE source IN ('יד2', 'מדלן')`,
     `UPDATE deals SET source = 'אחר' WHERE source = 'אתר אינטרנט'`,
+    // Commercial-leasing: remap old deal stages to the 7-stage commercial pipeline
+    `UPDATE deals SET stage = 6 WHERE stage = 8`,
+    `UPDATE deals SET stage = 7 WHERE stage = 9`,
   ];
   dataMigrations.forEach(sql => {
     try { db.run(sql); } catch (e) { /* ignore errors */ }
