@@ -585,6 +585,10 @@ function runMigrations() {
     // Gross vs net area — rent & management are calculated off gross
     `ALTER TABLE properties ADD COLUMN area_gross INTEGER DEFAULT 0`,
     `ALTER TABLE properties ADD COLUMN area_net INTEGER DEFAULT 0`,
+    // Free-text floor label (e.g. "A1", "קומת פיאצה")
+    `ALTER TABLE properties ADD COLUMN floor_label TEXT DEFAULT ''`,
+    // Per-project gross/net ratio (%) — gross = net * (1 + ratio/100)
+    `ALTER TABLE projects ADD COLUMN gross_net_ratio REAL DEFAULT 0`,
     // Commercial-leasing: retail-chain fields on companies
     `ALTER TABLE companies ADD COLUMN business_category TEXT DEFAULT ''`,
     `ALTER TABLE companies ADD COLUMN business_subcategory TEXT DEFAULT ''`,
@@ -637,6 +641,8 @@ function runMigrations() {
     // Backfill gross/net from the legacy single area field
     `UPDATE properties SET area_gross = area WHERE (area_gross IS NULL OR area_gross = 0) AND area > 0`,
     `UPDATE properties SET area_net = area WHERE (area_net IS NULL OR area_net = 0) AND area > 0`,
+    // Backfill floor_label from the numeric floor
+    `UPDATE properties SET floor_label = CAST(floor AS TEXT) WHERE (floor_label IS NULL OR floor_label = '') AND floor != 0`,
   ];
   dataMigrations.forEach(sql => {
     try { db.run(sql); } catch (e) { /* ignore errors */ }
