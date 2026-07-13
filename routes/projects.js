@@ -93,7 +93,8 @@ router.get('/:id/marketing-report', authMiddleware, (req, res) => {
       const ph = unitIds.map(() => '?').join(',');
       deals = all(`
         SELECT d.*, c.first_name || ' ' || c.last_name as contact_name,
-               comp.name as chain_name, p.unit_number as unit_number, p.designated_category as unit_category
+               comp.name as chain_name, p.unit_number as unit_number, p.designated_category as unit_category,
+               p.area_gross as unit_gross, p.area_net as unit_net
         FROM deals d
         LEFT JOIN contacts c ON d.contact_id = c.id
         LEFT JOIN companies comp ON c.company_id = comp.id
