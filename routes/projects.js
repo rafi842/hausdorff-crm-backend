@@ -74,4 +74,72 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
   }
 });
 
+// GET /:id/marketing-report?from=&to= — data for the developer marketing PDF:
+// activities (calls/meetings), negotiation status per unit, tenant-mix progress.
+router.get('/:id/marketing-report', authMiddleware, (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const fromDate = from || '2000-01-01';
+    const toDate = to ? to + ' 23:59:59' : '2999-12-31';
+
+    const project = get(`SELECT p.*, c.name as company_name FROM projects p LEFT JOIN companies c ON p.company_id = c.id WHERE p.id = ?`, [req.params.id]);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const units = all('SELECT * FROM properties WHERE project_id = ? ORDER BY floor, unit_number', [req.params.id]);
+    const unitIds = units.map(u => u.id);
+
+    let deals = [];
+    if (unitIds.length) {
+      const ph = unitIds.map(() => '?').join(',');
+      deals = all(`
+        SELECT d.*, c.first_name || ' ' || c.last_name as contact_name,
+               comp.name as chain_name, p.unit_number as unit_number, p.designated_category as unit_category
+        FROM deals d
+        LEFT JOIN contacts c ON d.contact_id = c.id
+        LEFT JOIN companies comp ON c.company_id = comp.id
+        LEFT JOIN properties p ON d.property_id = p.id
+        WHERE d.property_id IN (${ph})
+        ORDER BY d.stage DESC, d.updated_at DESC
+      `, unitIds);
+    }
+
+    const entityIds = [...deals.map(d => d.id), ...unitIds];
+    let activities = [];
+    if (entityIds.length) {
+      const ph = entityIds.map(() => '?').join(',');
+      activities = all(
+        `SELECT * FROM activities WHERE entity_id IN (${ph}) AND created_at >= ? AND created_at <= ? ORDER BY created_at DESC`,
+        [...entityIds, fromDate, toDate]
+      );
+    }
+    // Enrich activities with chain/unit context
+    const dealById = {}; deals.forEach(d => { dealById[d.id] = d; });
+    const unitById = {}; units.forEach(u => { unitById[u.id] = u; });
+    activities = activities.map(a => {
+      let contact_name = '', chain_name = '', unit_number = '';
+      if (a.entity_type === 'deal' && dealById[a.entity_id]) {
+        contact_name = dealById[a.entity_id].contact_name || '';
+        chain_name = dealById[a.entity_id].chain_name || '';
+        unit_number = dealById[a.entity_id].unit_number || '';
+      } else if (a.entity_type === 'property' && unitById[a.entity_id]) {
+        unit_number = unitById[a.entity_id].unit_number || '';
+      }
+      return { ...a, contact_name, chain_name, unit_number };
+    });
+
+    const statusOf = s => (s === 'תפוס' || s === 'נמכר') ? 'leased' : s === 'בתהליך' ? 'nego' : 'free';
+    const summary = {
+      totalUnits: units.length, leased: 0, nego: 0, free: 0,
+      activityCount: activities.length,
+      openDeals: deals.filter(d => d.stage >= 1 && d.stage <= 5).length,
+      signed: deals.filter(d => d.stage === 6).length,
+    };
+    units.forEach(u => { summary[statusOf(u.status)]++; });
+
+    res.json({ project, from: from || '', to: to || '', units, deals, activities, summary });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
