@@ -182,4 +182,54 @@ router.post('/:id/smart-match', authMiddleware, (req, res) => {
   }
 });
 
+// GET /:id/chain-match — commercial: retail chains matching this unit by
+// category, size and budget.
+router.get('/:id/chain-match', authMiddleware, (req, res) => {
+  try {
+    const unit = get('SELECT * FROM properties WHERE id = ?', [req.params.id]);
+    if (!unit) return res.status(404).json({ error: 'Unit not found' });
+
+    // Resolve the main category of the unit's designated sub-category.
+    let unitMain = '';
+    if (unit.designated_category) {
+      const sub = get('SELECT parent_id FROM business_categories WHERE name = ? AND parent_id IS NOT NULL', [unit.designated_category]);
+      if (sub && sub.parent_id) {
+        const main = get('SELECT name FROM business_categories WHERE id = ?', [sub.parent_id]);
+        unitMain = main ? main.name : '';
+      }
+    }
+
+    const chains = all(`SELECT * FROM companies WHERE (business_category != '' OR business_subcategory != '') AND chain_status != 'לא רלוונטי'`);
+    const scored = chains.map(ch => {
+      let score = 0; const reasons = [];
+      // Category (primary, up to 60)
+      if (unit.designated_category && ch.business_subcategory === unit.designated_category) {
+        score += 60; reasons.push('קטגוריה מדויקת');
+      } else if (unitMain && ch.business_category === unitMain) {
+        score += 40; reasons.push('קטגוריה ראשית תואמת');
+      }
+      // Size (up to 25)
+      const min = ch.target_area_min || 0, max = ch.target_area_max || 0;
+      if (unit.area && (min || max)) {
+        if ((!min || unit.area >= min) && (!max || unit.area <= max)) { score += 25; reasons.push('שטח מתאים'); }
+        else if (max && unit.area <= max * 1.15) { score += 10; reasons.push('שטח קרוב'); }
+      } else if (unit.area) { score += 10; }
+      // Budget (up to 15)
+      if (unit.rent_per_sqm && ch.rent_budget_per_sqm) {
+        if (unit.rent_per_sqm <= ch.rent_budget_per_sqm) { score += 15; reasons.push('בתקציב'); }
+      } else { score += 5; }
+      return {
+        id: ch.id, name: ch.name,
+        business_category: ch.business_category, business_subcategory: ch.business_subcategory,
+        chain_status: ch.chain_status, branch_count: ch.branch_count, phone: ch.phone,
+        match_score: score, match_reasons: reasons,
+      };
+    }).filter(c => c.match_score >= 40).sort((a, b) => b.match_score - a.match_score);
+
+    res.json(scored);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
