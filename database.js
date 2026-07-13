@@ -582,6 +582,9 @@ function runMigrations() {
     `ALTER TABLE properties ADD COLUMN rent_per_sqm INTEGER DEFAULT 0`,
     `ALTER TABLE properties ADD COLUMN management_fee INTEGER DEFAULT 0`,
     `ALTER TABLE properties ADD COLUMN is_anchor INTEGER DEFAULT 0`,
+    // Gross vs net area — rent & management are calculated off gross
+    `ALTER TABLE properties ADD COLUMN area_gross INTEGER DEFAULT 0`,
+    `ALTER TABLE properties ADD COLUMN area_net INTEGER DEFAULT 0`,
     // Commercial-leasing: retail-chain fields on companies
     `ALTER TABLE companies ADD COLUMN business_category TEXT DEFAULT ''`,
     `ALTER TABLE companies ADD COLUMN business_subcategory TEXT DEFAULT ''`,
@@ -631,6 +634,9 @@ function runMigrations() {
     // Commercial-leasing: remap old deal stages to the 7-stage commercial pipeline
     `UPDATE deals SET stage = 6 WHERE stage = 8`,
     `UPDATE deals SET stage = 7 WHERE stage = 9`,
+    // Backfill gross/net from the legacy single area field
+    `UPDATE properties SET area_gross = area WHERE (area_gross IS NULL OR area_gross = 0) AND area > 0`,
+    `UPDATE properties SET area_net = area WHERE (area_net IS NULL OR area_net = 0) AND area > 0`,
   ];
   dataMigrations.forEach(sql => {
     try { db.run(sql); } catch (e) { /* ignore errors */ }

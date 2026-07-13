@@ -64,7 +64,8 @@ router.post('/', authMiddleware, (req, res) => {
       description, land_use, zoning_plan, land_area_dunams,
       has_tenant, monthly_rent, annual_yield, tenant_name, lease_start_date, lease_end_date,
       exclusivity, deal_type, owner_id,
-      unit_number, designated_category, frontage, rent_per_sqm, management_fee, is_anchor
+      unit_number, designated_category, frontage, rent_per_sqm, management_fee, is_anchor,
+      area_gross, area_net
     } = req.body;
     const now = new Date().toISOString();
     run(`INSERT INTO properties (id,project_id,address,city,neighborhood,type,status,price,area,rooms,floor,total_floors,parking,storage,balcony,elevator,description,land_use,zoning_plan,land_area_dunams,has_tenant,monthly_rent,annual_yield,tenant_name,lease_start_date,lease_end_date,exclusivity,deal_type,owner_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -75,8 +76,8 @@ router.post('/', authMiddleware, (req, res) => {
        has_tenant ? 1 : 0, monthly_rent||0, annual_yield||0,
        tenant_name||'', lease_start_date||'', lease_end_date||'',
        exclusivity ? 1 : 0, deal_type||'מכירה', owner_id||null, now, now]);
-    run(`UPDATE properties SET unit_number=?,designated_category=?,frontage=?,rent_per_sqm=?,management_fee=?,is_anchor=? WHERE id=?`,
-      [unit_number||'', designated_category||'', frontage||0, rent_per_sqm||0, management_fee||0, is_anchor ? 1 : 0, id]);
+    run(`UPDATE properties SET unit_number=?,designated_category=?,frontage=?,rent_per_sqm=?,management_fee=?,is_anchor=?,area_gross=?,area_net=? WHERE id=?`,
+      [unit_number||'', designated_category||'', frontage||0, rent_per_sqm||0, management_fee||0, is_anchor ? 1 : 0, area_gross||0, area_net||0, id]);
     res.status(201).json(get('SELECT * FROM properties WHERE id = ?', [id]));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -91,7 +92,8 @@ router.put('/:id', authMiddleware, (req, res) => {
       description, land_use, zoning_plan, land_area_dunams,
       has_tenant, monthly_rent, annual_yield, tenant_name, lease_start_date, lease_end_date,
       exclusivity, deal_type, owner_id,
-      unit_number, designated_category, frontage, rent_per_sqm, management_fee, is_anchor
+      unit_number, designated_category, frontage, rent_per_sqm, management_fee, is_anchor,
+      area_gross, area_net
     } = req.body;
     const now = new Date().toISOString();
     run(`UPDATE properties SET project_id=?,address=?,city=?,neighborhood=?,type=?,status=?,price=?,area=?,rooms=?,floor=?,total_floors=?,parking=?,storage=?,balcony=?,elevator=?,description=?,land_use=?,zoning_plan=?,land_area_dunams=?,has_tenant=?,monthly_rent=?,annual_yield=?,tenant_name=?,lease_start_date=?,lease_end_date=?,exclusivity=?,deal_type=?,owner_id=?,updated_at=? WHERE id=?`,
@@ -102,8 +104,8 @@ router.put('/:id', authMiddleware, (req, res) => {
        has_tenant ? 1 : 0, monthly_rent||0, annual_yield||0,
        tenant_name||'', lease_start_date||'', lease_end_date||'',
        exclusivity ? 1 : 0, deal_type||'מכירה', owner_id||null, now, req.params.id]);
-    run(`UPDATE properties SET unit_number=?,designated_category=?,frontage=?,rent_per_sqm=?,management_fee=?,is_anchor=? WHERE id=?`,
-      [unit_number||'', designated_category||'', frontage||0, rent_per_sqm||0, management_fee||0, is_anchor ? 1 : 0, req.params.id]);
+    run(`UPDATE properties SET unit_number=?,designated_category=?,frontage=?,rent_per_sqm=?,management_fee=?,is_anchor=?,area_gross=?,area_net=? WHERE id=?`,
+      [unit_number||'', designated_category||'', frontage||0, rent_per_sqm||0, management_fee||0, is_anchor ? 1 : 0, area_gross||0, area_net||0, req.params.id]);
     res.json(get('SELECT * FROM properties WHERE id = ?', [req.params.id]));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -208,12 +210,13 @@ router.get('/:id/chain-match', authMiddleware, (req, res) => {
       } else if (unitMain && ch.business_category === unitMain) {
         score += 40; reasons.push('קטגוריה ראשית תואמת');
       }
-      // Size (up to 25)
+      // Size (up to 25) — matched on gross area
+      const uArea = unit.area_gross || unit.area || 0;
       const min = ch.target_area_min || 0, max = ch.target_area_max || 0;
-      if (unit.area && (min || max)) {
-        if ((!min || unit.area >= min) && (!max || unit.area <= max)) { score += 25; reasons.push('שטח מתאים'); }
-        else if (max && unit.area <= max * 1.15) { score += 10; reasons.push('שטח קרוב'); }
-      } else if (unit.area) { score += 10; }
+      if (uArea && (min || max)) {
+        if ((!min || uArea >= min) && (!max || uArea <= max)) { score += 25; reasons.push('שטח מתאים'); }
+        else if (max && uArea <= max * 1.15) { score += 10; reasons.push('שטח קרוב'); }
+      } else if (uArea) { score += 10; }
       // Budget (up to 15)
       if (unit.rent_per_sqm && ch.rent_budget_per_sqm) {
         if (unit.rent_per_sqm <= ch.rent_budget_per_sqm) { score += 15; reasons.push('בתקציב'); }

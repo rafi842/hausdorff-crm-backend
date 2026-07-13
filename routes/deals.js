@@ -82,7 +82,7 @@ router.get('/commissions', authMiddleware, (req, res) => {
   try {
     const deals = all(`
       SELECT d.*, c.first_name || ' ' || c.last_name as contact_name, comp.name as chain_name,
-             p.unit_number, p.rent_per_sqm, p.area as unit_area, p.designated_category,
+             p.unit_number, p.rent_per_sqm, COALESCE(NULLIF(p.area_gross, 0), p.area) as unit_area, p.designated_category,
              proj.name as project_name
       FROM deals d
       LEFT JOIN contacts c ON d.contact_id = c.id
