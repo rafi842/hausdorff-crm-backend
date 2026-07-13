@@ -76,6 +76,42 @@ router.get('/at-risk', authMiddleware, (req, res) => {
   }
 });
 
+// GET /commissions — signed deals (stage 6). Commission = one month's rent of
+// the leased unit (rent_per_sqm * area, else the deal value).
+router.get('/commissions', authMiddleware, (req, res) => {
+  try {
+    const deals = all(`
+      SELECT d.*, c.first_name || ' ' || c.last_name as contact_name, comp.name as chain_name,
+             p.unit_number, p.rent_per_sqm, p.area as unit_area, p.designated_category,
+             proj.name as project_name
+      FROM deals d
+      LEFT JOIN contacts c ON d.contact_id = c.id
+      LEFT JOIN companies comp ON c.company_id = comp.id
+      LEFT JOIN properties p ON d.property_id = p.id
+      LEFT JOIN projects proj ON p.project_id = proj.id
+      WHERE d.stage = 6
+      ORDER BY COALESCE(d.actual_close_date, d.updated_at) DESC
+    `);
+    const rows = deals.map(d => {
+      const monthlyRent = (d.rent_per_sqm && d.unit_area) ? d.rent_per_sqm * d.unit_area : (d.value || 0);
+      return {
+        id: d.id,
+        chain_name: d.chain_name || d.contact_name || '—',
+        project_name: d.project_name || '—',
+        unit_number: d.unit_number || '—',
+        designated_category: d.designated_category || '',
+        monthly_rent: monthlyRent,
+        commission: monthlyRent, // one month's rent
+        close_date: d.actual_close_date || d.updated_at,
+      };
+    });
+    const total = rows.reduce((s, r) => s + r.commission, 0);
+    res.json({ rows, total, count: rows.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/:id', authMiddleware, (req, res) => {
   try {
     const deal = get(`
