@@ -170,7 +170,9 @@ router.get('/:id/marketing-report', authMiddleware, (req, res) => {
       byStatusNet: { signed: pf.signedNet, terms: pf.termsNet, nego: pf.negoNet, free: pf.freeNet },
     };
 
-    res.json({ project, from: from || '', to: to || '', units, deals, activities, summary, proforma });
+    const floorPlans = all('SELECT * FROM floor_plans WHERE project_id = ? ORDER BY created_at ASC', [req.params.id]);
+
+    res.json({ project, from: from || '', to: to || '', units, deals, activities, summary, proforma, floorPlans });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

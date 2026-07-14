@@ -95,6 +95,7 @@ app.use('/api/companies', require('./routes/companies'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/unit-candidates', require('./routes/candidates'));
+app.use('/api/floor-plans', require('./routes/floorplans'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/properties', require('./routes/properties'));
 app.use('/api/deals', require('./routes/deals'));

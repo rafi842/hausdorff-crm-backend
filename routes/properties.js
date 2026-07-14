@@ -129,6 +129,17 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
   }
 });
 
+// PUT /:id/polygon — save only the traced map polygon (avoids clobbering the
+// full unit record when the floor-plan editor saves a shape).
+router.put('/:id/polygon', authMiddleware, (req, res) => {
+  try {
+    run('UPDATE properties SET map_polygon = ? WHERE id = ?', [req.body.map_polygon || '', req.params.id]);
+    res.json(get('SELECT * FROM properties WHERE id = ?', [req.params.id]));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST smart match for property — find matching contacts
 router.post('/:id/smart-match', authMiddleware, (req, res) => {
   try {
