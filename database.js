@@ -501,6 +501,37 @@ async function initializeDatabase() {
     );
   `);
 
+  // ── Unit candidates ("תמהיל מוצע") — the curated shortlist of retail chains
+  //    proposed for a unit. A candidate can be promoted into a full deal.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS unit_candidates (
+      id TEXT PRIMARY KEY,
+      property_id TEXT NOT NULL,
+      company_id TEXT DEFAULT NULL,
+      chain_name TEXT DEFAULT '',
+      category TEXT DEFAULT '',
+      note TEXT DEFAULT '',
+      candidate_status TEXT DEFAULT 'הוצע',
+      rank INTEGER DEFAULT 0,
+      deal_id TEXT DEFAULT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  // ── Floor plans — one uploaded plan image per project floor, used by the
+  //    developer report's status map. Units carry a map_polygon into it.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS floor_plans (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      floor_label TEXT DEFAULT '',
+      image TEXT DEFAULT '',
+      width INTEGER DEFAULT 0,
+      height INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
   saveDb();
 
   // ── Run migrations for existing DB ─────────────────────────────────────────
@@ -607,6 +638,18 @@ function runMigrations() {
     `ALTER TABLE companies ADD COLUMN rent_budget_per_sqm INTEGER DEFAULT 0`,
     `ALTER TABLE companies ADD COLUMN chain_status TEXT DEFAULT 'פוטנציאלי'`,
     `ALTER TABLE companies ADD COLUMN expansion_notes TEXT DEFAULT ''`,
+    // Tenant-mix builder: proposed-tenant profile, team-only note, turnover terms
+    `ALTER TABLE properties ADD COLUMN target_profile TEXT DEFAULT ''`,
+    `ALTER TABLE properties ADD COLUMN internal_note TEXT DEFAULT ''`,
+    `ALTER TABLE properties ADD COLUMN turnover_pct REAL DEFAULT 0`,
+    `ALTER TABLE properties ADD COLUMN min_turnover INTEGER DEFAULT 0`,
+    // Occupancy status (4-color): auto-derived from deals unless manually locked
+    `ALTER TABLE properties ADD COLUMN occupancy_status TEXT DEFAULT ''`,
+    `ALTER TABLE properties ADD COLUMN occupancy_status_manual INTEGER DEFAULT 0`,
+    // Traced polygon (JSON array of {x,y} in 0..1 normalized coords) on the floor plan
+    `ALTER TABLE properties ADD COLUMN map_polygon TEXT DEFAULT ''`,
+    // Per-project management fee default (₪ per sqm gross); unit can override
+    `ALTER TABLE projects ADD COLUMN mgmt_fee_per_sqm INTEGER DEFAULT 35`,
   ];
 
   migrations.forEach(sql => {

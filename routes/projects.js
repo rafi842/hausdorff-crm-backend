@@ -43,11 +43,11 @@ router.get('/:id/properties', (req, res) => {
 router.post('/', authMiddleware, (req, res) => {
   try {
     const id = uuidv4();
-    const { name, company_id, address, city, neighborhood, total_units, available_units, status, description, amenities, expected_completion, gross_net_ratio } = req.body;
+    const { name, company_id, address, city, neighborhood, total_units, available_units, status, description, amenities, expected_completion, gross_net_ratio, mgmt_fee_per_sqm } = req.body;
     const now = new Date().toISOString();
     run(`INSERT INTO projects (id,name,company_id,address,city,neighborhood,total_units,available_units,status,description,amenities,expected_completion,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [id, name, company_id||null, address||'', city||'', neighborhood||'', total_units||0, available_units||0, status||'בתכנון', description||'', JSON.stringify(amenities||[]), expected_completion||null, now, now]);
-    run(`UPDATE projects SET gross_net_ratio=? WHERE id=?`, [gross_net_ratio||0, id]);
+    run(`UPDATE projects SET gross_net_ratio=?,mgmt_fee_per_sqm=? WHERE id=?`, [gross_net_ratio||0, mgmt_fee_per_sqm != null ? mgmt_fee_per_sqm : 35, id]);
     res.status(201).json(get('SELECT * FROM projects WHERE id = ?', [id]));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -56,11 +56,11 @@ router.post('/', authMiddleware, (req, res) => {
 
 router.put('/:id', authMiddleware, (req, res) => {
   try {
-    const { name, company_id, address, city, neighborhood, total_units, available_units, status, description, amenities, expected_completion, gross_net_ratio } = req.body;
+    const { name, company_id, address, city, neighborhood, total_units, available_units, status, description, amenities, expected_completion, gross_net_ratio, mgmt_fee_per_sqm } = req.body;
     const now = new Date().toISOString();
     run(`UPDATE projects SET name=?,company_id=?,address=?,city=?,neighborhood=?,total_units=?,available_units=?,status=?,description=?,amenities=?,expected_completion=?,updated_at=? WHERE id=?`,
       [name, company_id||null, address||'', city||'', neighborhood||'', total_units||0, available_units||0, status||'בתכנון', description||'', JSON.stringify(amenities||[]), expected_completion||null, now, req.params.id]);
-    run(`UPDATE projects SET gross_net_ratio=? WHERE id=?`, [gross_net_ratio||0, req.params.id]);
+    run(`UPDATE projects SET gross_net_ratio=?,mgmt_fee_per_sqm=? WHERE id=?`, [gross_net_ratio||0, mgmt_fee_per_sqm != null ? mgmt_fee_per_sqm : 35, req.params.id]);
     res.json(get('SELECT * FROM projects WHERE id = ?', [req.params.id]));
   } catch (err) {
     res.status(500).json({ error: err.message });
