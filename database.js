@@ -492,6 +492,15 @@ async function initializeDatabase() {
     );
   `);
 
+  // ── App settings (key/value, e.g. company_logo data URI) ───────────────────
+  db.run(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT DEFAULT '',
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
   saveDb();
 
   // ── Run migrations for existing DB ─────────────────────────────────────────
