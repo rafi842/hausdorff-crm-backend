@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { resolveOccupancyStatus } = require('../utils/occupancy');
 
 router.get('/', authMiddleware, (req, res) => {
   try {
@@ -87,7 +88,16 @@ router.get('/:id/marketing-report', authMiddleware, (req, res) => {
     const project = get(`SELECT p.*, c.name as company_name FROM projects p LEFT JOIN companies c ON p.company_id = c.id WHERE p.id = ?`, [req.params.id]);
     if (!project) return res.status(404).json({ error: 'Project not found' });
 
-    const units = all('SELECT * FROM properties WHERE project_id = ? ORDER BY floor, unit_number', [req.params.id]);
+    const rawUnits = all('SELECT * FROM properties WHERE project_id = ? ORDER BY floor, unit_number', [req.params.id]);
+    // Enrich each unit with its effective occupancy status and proposed-mix shortlist.
+    const units = rawUnits.map(u => {
+      const cands = all(`
+        SELECT uc.chain_name, uc.candidate_status, uc.deal_id, c.name AS company_name
+        FROM unit_candidates uc LEFT JOIN companies c ON uc.company_id = c.id
+        WHERE uc.property_id = ? ORDER BY uc.rank ASC, uc.created_at ASC
+      `, [u.id]).map(x => ({ name: x.chain_name || x.company_name || '', candidate_status: x.candidate_status, promoted: !!x.deal_id }));
+      return { ...u, occupancy_status: resolveOccupancyStatus(u), candidates: cands };
+    });
     const unitIds = units.map(u => u.id);
 
     let deals = [];
@@ -130,16 +140,37 @@ router.get('/:id/marketing-report', authMiddleware, (req, res) => {
       return { ...a, contact_name, chain_name, unit_number };
     });
 
-    const statusOf = s => (s === 'תפוס' || s === 'נמכר') ? 'leased' : s === 'בתהליך' ? 'nego' : 'free';
     const summary = {
       totalUnits: units.length, leased: 0, nego: 0, free: 0,
       activityCount: activities.length,
       openDeals: deals.filter(d => d.stage >= 1 && d.stage <= 5).length,
       signed: deals.filter(d => d.stage === 6).length,
     };
-    units.forEach(u => { summary[statusOf(u.status)]++; });
+    // ── Pro-forma: roll the units up into project-level economics (full occupancy)
+    const mgmtDefault = project.mgmt_fee_per_sqm != null ? project.mgmt_fee_per_sqm : 35;
+    const pf = { gross: 0, net: 0, monthlyRent: 0, monthlyMgmt: 0, signedNet: 0, termsNet: 0, negoNet: 0, freeNet: 0 };
+    units.forEach(u => {
+      const g = u.area_gross || u.area || 0, n = u.area_net || u.area || 0;
+      pf.gross += g; pf.net += n;
+      pf.monthlyRent += g * (u.rent_per_sqm || 0);
+      pf.monthlyMgmt += g * (u.management_fee || mgmtDefault);
+      const os = u.occupancy_status;
+      if (os === 'חתום חוזה') { pf.signedNet += n; summary.leased++; }
+      else if (os === 'חתמו תנאים') { pf.termsNet += n; summary.nego++; }
+      else if (os === 'במו"מ') { pf.negoNet += n; summary.nego++; }
+      else { pf.freeNet += n; summary.free++; }
+    });
+    const proforma = {
+      grossArea: pf.gross, netArea: pf.net,
+      annualRent: pf.monthlyRent * 12, monthlyRent: pf.monthlyRent,
+      annualMgmt: pf.monthlyMgmt * 12, monthlyMgmt: pf.monthlyMgmt,
+      avgRentGross: pf.gross ? pf.monthlyRent / pf.gross : 0,
+      avgRentNet: pf.net ? pf.monthlyRent / pf.net : 0,
+      occupancyPct: pf.net ? Math.round(pf.signedNet / pf.net * 100) : 0,
+      byStatusNet: { signed: pf.signedNet, terms: pf.termsNet, nego: pf.negoNet, free: pf.freeNet },
+    };
 
-    res.json({ project, from: from || '', to: to || '', units, deals, activities, summary });
+    res.json({ project, from: from || '', to: to || '', units, deals, activities, summary, proforma });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
