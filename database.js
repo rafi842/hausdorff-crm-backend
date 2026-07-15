@@ -650,6 +650,10 @@ function runMigrations() {
     `ALTER TABLE properties ADD COLUMN map_polygon TEXT DEFAULT ''`,
     // Per-project management fee default (₪ per sqm gross); unit can override
     `ALTER TABLE projects ADD COLUMN mgmt_fee_per_sqm INTEGER DEFAULT 35`,
+    // Per-unit marketing plan image (data URI) — pickable from the price quote
+    `ALTER TABLE properties ADD COLUMN marketing_plan TEXT DEFAULT ''`,
+    // Link a proposal to the chain (company), in addition to the contact
+    `ALTER TABLE proposals ADD COLUMN company_id TEXT DEFAULT ''`,
   ];
 
   migrations.forEach(sql => {

@@ -7,16 +7,24 @@ const { authMiddleware, adminOnly } = require('../middleware/auth');
 // All routes require auth
 router.use(authMiddleware);
 
-// GET / - list all proposals with contact names
+// GET / - list proposals (optionally filtered by contact_id or company_id)
 router.get('/', (req, res) => {
   try {
+    const { contact_id, company_id } = req.query;
+    let where = '';
+    const params = [];
+    if (contact_id) { where = 'WHERE p.contact_id = ?'; params.push(contact_id); }
+    else if (company_id) { where = 'WHERE p.company_id = ?'; params.push(company_id); }
     const proposals = all(`
       SELECT p.*,
-             c.first_name || ' ' || c.last_name AS contact_name
+             c.first_name || ' ' || c.last_name AS contact_name,
+             comp.name AS company_name
       FROM proposals p
       LEFT JOIN contacts c ON c.id = p.contact_id
+      LEFT JOIN companies comp ON comp.id = p.company_id
+      ${where}
       ORDER BY p.created_at DESC
-    `);
+    `, params);
     res.json(proposals);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -43,16 +51,16 @@ router.get('/:id', (req, res) => {
 // POST / - create proposal
 router.post('/', (req, res) => {
   try {
-    const { template_type, deal_id, contact_id, property_id, title, data, status } = req.body;
+    const { template_type, deal_id, contact_id, company_id, property_id, title, data, status } = req.body;
     if (!template_type || !title || !data) {
       return res.status(400).json({ error: 'template_type, title and data are required' });
     }
     const id = uuidv4();
     const created_by = req.user?.name || req.user?.email || 'מנהל';
     run(
-      `INSERT INTO proposals (id, template_type, deal_id, contact_id, property_id, title, data, status, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, template_type, deal_id || null, contact_id || null, property_id || null, title, data, status || 'draft', created_by]
+      `INSERT INTO proposals (id, template_type, deal_id, contact_id, company_id, property_id, title, data, status, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, template_type, deal_id || null, contact_id || null, company_id || null, property_id || null, title, data, status || 'draft', created_by]
     );
     const proposal = get('SELECT * FROM proposals WHERE id = ?', [id]);
     res.status(201).json(proposal);
@@ -66,13 +74,13 @@ router.put('/:id', (req, res) => {
   try {
     const existing = get('SELECT id FROM proposals WHERE id = ?', [req.params.id]);
     if (!existing) return res.status(404).json({ error: 'Proposal not found' });
-    const { template_type, deal_id, contact_id, property_id, title, data, status } = req.body;
+    const { template_type, deal_id, contact_id, company_id, property_id, title, data, status } = req.body;
     run(
       `UPDATE proposals SET
-        template_type = ?, deal_id = ?, contact_id = ?, property_id = ?,
+        template_type = ?, deal_id = ?, contact_id = ?, company_id = ?, property_id = ?,
         title = ?, data = ?, status = ?, updated_at = datetime('now')
        WHERE id = ?`,
-      [template_type, deal_id || null, contact_id || null, property_id || null, title, data, status, req.params.id]
+      [template_type, deal_id || null, contact_id || null, company_id || null, property_id || null, title, data, status, req.params.id]
     );
     const proposal = get(`
       SELECT p.*, c.first_name || ' ' || c.last_name AS contact_name

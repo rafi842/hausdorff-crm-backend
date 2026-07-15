@@ -44,4 +44,29 @@ router.delete('/logo', authMiddleware, adminOnly, (req, res) => {
   }
 });
 
+// Branded letterhead ("בלנק") — a full-page A4 background image (larger limit).
+const uploadLetter = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+router.post('/letterhead', authMiddleware, adminOnly, uploadLetter.single('letterhead'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'לא הועלה קובץ' });
+    const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    if (!allowed.includes(req.file.mimetype)) return res.status(400).json({ error: 'סוג קובץ לא נתמך (PNG/JPG/WEBP)' });
+    const dataUri = 'data:' + req.file.mimetype + ';base64,' + req.file.buffer.toString('base64');
+    const exists = get(`SELECT key FROM app_settings WHERE key = 'company_letterhead'`);
+    if (exists) run(`UPDATE app_settings SET value = ?, updated_at = datetime('now') WHERE key = 'company_letterhead'`, [dataUri]);
+    else run(`INSERT INTO app_settings (key, value) VALUES ('company_letterhead', ?)`, [dataUri]);
+    res.json({ company_letterhead: dataUri });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+router.delete('/letterhead', authMiddleware, adminOnly, (req, res) => {
+  try {
+    run(`DELETE FROM app_settings WHERE key = 'company_letterhead'`);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

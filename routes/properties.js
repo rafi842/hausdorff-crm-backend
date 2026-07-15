@@ -140,6 +140,16 @@ router.put('/:id/polygon', authMiddleware, (req, res) => {
   }
 });
 
+// PUT /:id/marketing-plan — save only the unit's marketing-plan image (data URI).
+router.put('/:id/marketing-plan', authMiddleware, (req, res) => {
+  try {
+    run('UPDATE properties SET marketing_plan = ? WHERE id = ?', [req.body.marketing_plan || '', req.params.id]);
+    res.json(get('SELECT * FROM properties WHERE id = ?', [req.params.id]));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST smart match for property — find matching contacts
 router.post('/:id/smart-match', authMiddleware, (req, res) => {
   try {
