@@ -654,6 +654,19 @@ function runMigrations() {
     `ALTER TABLE properties ADD COLUMN marketing_plan TEXT DEFAULT ''`,
     // Link a proposal to the chain (company), in addition to the contact
     `ALTER TABLE proposals ADD COLUMN company_id TEXT DEFAULT ''`,
+    // Emailing a proposal: the agent prints the quote to PDF locally (Tahoma only
+    // exists on their machine) and uploads it; the file lives on disk under
+    // UPLOADS_DIR, never in the DB — every sql.js mutation rewrites the whole file.
+    `ALTER TABLE proposals ADD COLUMN pdf_file_name TEXT DEFAULT ''`,
+    `ALTER TABLE proposals ADD COLUMN pdf_original_name TEXT DEFAULT ''`,
+    `ALTER TABLE proposals ADD COLUMN pdf_size INTEGER DEFAULT 0`,
+    `ALTER TABLE proposals ADD COLUMN pdf_uploaded_at TEXT DEFAULT ''`,
+    `ALTER TABLE proposals ADD COLUMN sent_to TEXT DEFAULT ''`,
+    `ALTER TABLE proposals ADD COLUMN sent_at TEXT DEFAULT ''`,
+    // Space-separated scopes Google actually granted. Users who connected before
+    // gmail.send was requested hold a calendar-only token, and the only way to
+    // know is to record what came back with it.
+    `ALTER TABLE users ADD COLUMN google_scopes TEXT DEFAULT ''`,
   ];
 
   migrations.forEach(sql => {

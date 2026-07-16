@@ -35,7 +35,14 @@ router.post('/auth', authMiddleware, (req, res) => {
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
-      scope: ['https://www.googleapis.com/auth/calendar.events'],
+      // gmail.send lets the CRM email proposals as the signed-in agent. It is a
+      // "restricted" scope, but this OAuth app is Internal to the Workspace org,
+      // so it needs no Google verification. Anyone already connected before this
+      // scope existed must reconnect once to grant it — /status reports that.
+      scope: [
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/gmail.send'
+      ],
       // Signed, short-lived state binds the callback to this user and prevents
       // an attacker from linking their Google account to someone else's record.
       state: jwt.sign({ uid: req.user.id, p: 'gcal' }, JWT_SECRET, { expiresIn: '10m' })
@@ -73,11 +80,11 @@ router.get('/callback', async (req, res) => {
 
     // If Google sent a refresh_token, use it. Otherwise keep existing one.
     if (tokens.refresh_token) {
-      run(`UPDATE users SET google_refresh_token=?, google_access_token=?, google_token_expiry=?, calendar_sync_enabled=1 WHERE id=?`,
-        [tokens.refresh_token, tokens.access_token || '', tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : '', userId]);
+      run(`UPDATE users SET google_refresh_token=?, google_access_token=?, google_token_expiry=?, google_scopes=?, calendar_sync_enabled=1 WHERE id=?`,
+        [tokens.refresh_token, tokens.access_token || '', tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : '', tokens.scope || '', userId]);
     } else {
-      run(`UPDATE users SET google_access_token=?, google_token_expiry=?, calendar_sync_enabled=1 WHERE id=?`,
-        [tokens.access_token || '', tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : '', userId]);
+      run(`UPDATE users SET google_access_token=?, google_token_expiry=?, google_scopes=?, calendar_sync_enabled=1 WHERE id=?`,
+        [tokens.access_token || '', tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : '', tokens.scope || '', userId]);
     }
 
     // Redirect to frontend settings page. 5173 is the Vite dev server — the
@@ -136,12 +143,16 @@ router.post('/create-event', authMiddleware, async (req, res) => {
 // GET /status - Calendar connection status
 router.get('/status', authMiddleware, (req, res) => {
   try {
-    const user = get('SELECT google_refresh_token, calendar_sync_enabled FROM users WHERE id = ?', [req.user.id]);
+    const user = get('SELECT google_refresh_token, google_scopes, calendar_sync_enabled FROM users WHERE id = ?', [req.user.id]);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    const connected = !!(user.google_refresh_token && user.google_refresh_token !== '');
     res.json({
-      connected: !!(user.google_refresh_token && user.google_refresh_token !== ''),
-      calendar_sync_enabled: !!(user.calendar_sync_enabled)
+      connected,
+      calendar_sync_enabled: !!(user.calendar_sync_enabled),
+      // Tokens minted before gmail.send was requested stay valid for calendar but
+      // cannot send mail; the UI uses this to prompt a one-time reconnect.
+      gmail_enabled: connected && (user.google_scopes || '').includes('gmail.send')
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
