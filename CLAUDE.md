@@ -61,7 +61,7 @@ Backend reads (none are required for local dev):
 - `JWT_SECRET` — **required in production**, falls back to a hardcoded dev string otherwise (process exits if missing in prod)
 - `DB_PATH`, `BACKUP_DIR`, `BACKUP_KEEP_COUNT`, `UPLOADS_DIR`
 - `WEBHOOK_VERIFY_TOKEN` (Facebook Lead Ads webhook in `routes/leads.js`)
-- Google Calendar OAuth: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` (used by `routes/calendar.js`)
+- Google Calendar OAuth (`routes/calendar.js`): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, plus `BASE_URL` (backend's own public origin — the callback URI is derived as `${BASE_URL}/api/calendar/callback`) and `FRONTEND_URL` (where the callback redirects afterwards, to `/settings`). `GOOGLE_REDIRECT_URI` optionally overrides the derived callback URI outright. The redirect URI must byte-match the one registered in the Google Cloud console.
 - `CORS_ORIGIN` exists but **leave unset on Railway** — see CORS note above.
 
 ## Test users (seeded on first run)

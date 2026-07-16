@@ -4,19 +4,33 @@ const jwt = require('jsonwebtoken');
 const { run, get, all, getDb } = require('../database');
 const { authMiddleware, JWT_SECRET } = require('../middleware/auth');
 
+// The redirect URI must byte-match the one registered in the Google Cloud
+// console. GOOGLE_REDIRECT_URI wins so the registered value can be pinned
+// without depending on how BASE_URL happens to be spelled (trailing slash,
+// http vs https, custom domain vs *.railway.app).
+function getRedirectUri() {
+  if (process.env.GOOGLE_REDIRECT_URI) return process.env.GOOGLE_REDIRECT_URI;
+  const base = (process.env.BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
+  return `${base}/api/calendar/callback`;
+}
+
+function getOAuthClient() {
+  const { google } = require('googleapis');
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    getRedirectUri()
+  );
+}
+
 // POST /auth - Generate OAuth2 URL
 router.post('/auth', authMiddleware, (req, res) => {
   try {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-
-    if (!clientId) {
+    if (!process.env.GOOGLE_CLIENT_ID) {
       return res.json({ error: 'Google Calendar not configured' });
     }
 
-    const { google } = require('googleapis');
-    const redirectUri = `${process.env.BASE_URL || 'http://localhost:3001'}/api/calendar/callback`;
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    const oauth2Client = getOAuthClient();
 
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
@@ -37,10 +51,8 @@ router.post('/auth', authMiddleware, (req, res) => {
 router.get('/callback', async (req, res) => {
   try {
     const { code, state } = req.query;
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
-    if (!clientId || !code) {
+    if (!process.env.GOOGLE_CLIENT_ID || !code) {
       return res.status(400).send('Missing configuration or code');
     }
 
@@ -55,9 +67,7 @@ router.get('/callback', async (req, res) => {
       return res.status(400).send('Invalid or expired OAuth state');
     }
 
-    const { google } = require('googleapis');
-    const redirectUri = `${process.env.BASE_URL || 'http://localhost:3001'}/api/calendar/callback`;
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    const oauth2Client = getOAuthClient();
 
     const { tokens } = await oauth2Client.getToken(code);
 
@@ -70,8 +80,9 @@ router.get('/callback', async (req, res) => {
         [tokens.access_token || '', tokens.expiry_date ? new Date(tokens.expiry_date).toISOString() : '', userId]);
     }
 
-    // Redirect to frontend settings page
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    // Redirect to frontend settings page. 5173 is the Vite dev server — the
+    // frontend is never served from 3000.
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
     res.redirect(`${frontendUrl}/settings`);
   } catch (err) {
     res.status(500).send('OAuth callback error: ' + err.message);
@@ -86,16 +97,12 @@ router.post('/create-event', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'Google Calendar not connected' });
     }
 
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-
-    if (!clientId) {
+    if (!process.env.GOOGLE_CLIENT_ID) {
       return res.status(400).json({ error: 'Google Calendar not configured' });
     }
 
     const { google } = require('googleapis');
-    const redirectUri = `${process.env.BASE_URL || 'http://localhost:3001'}/api/calendar/callback`;
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    const oauth2Client = getOAuthClient();
 
     oauth2Client.setCredentials({
       refresh_token: user.google_refresh_token
