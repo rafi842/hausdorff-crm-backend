@@ -39,9 +39,13 @@ router.post('/auth', authMiddleware, (req, res) => {
       // "restricted" scope, but this OAuth app is Internal to the Workspace org,
       // so it needs no Google verification. Anyone already connected before this
       // scope existed must reconnect once to grant it — /status reports that.
+      // gmail.settings.basic is read-only here: it fetches the agent's real Gmail
+      // signature so sent proposals look identical to mail they send by hand.
+      // Gmail only appends signatures in its own UI, never to API-sent messages.
       scope: [
         'https://www.googleapis.com/auth/calendar.events',
-        'https://www.googleapis.com/auth/gmail.send'
+        'https://www.googleapis.com/auth/gmail.send',
+        'https://www.googleapis.com/auth/gmail.settings.basic'
       ],
       // Signed, short-lived state binds the callback to this user and prevents
       // an attacker from linking their Google account to someone else's record.

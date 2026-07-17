@@ -202,6 +202,42 @@ router.delete('/:id/pdf', (req, res) => {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// A plain-text part carries no direction, so Gmail lays Hebrew out left-to-right
+// and strands the punctuation. Only an HTML part can say dir="rtl".
+function buildHtmlBody(text, signatureHtml) {
+  const body = escapeHtml(text || '').replace(/\r?\n/g, '<br>');
+  const sig = signatureHtml ? `<br><br>${signatureHtml}` : '';
+  return `<div dir="rtl" style="text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:14px;">${body}${sig}</div>`;
+}
+
+// Gmail attaches signatures in its own compose UI only — messages sent through the
+// API get nothing. Pull the agent's real one so CRM mail matches what they send by
+// hand. Best-effort: a proposal that sends without a signature beats one that fails.
+async function fetchGmailSignature(gmail) {
+  try {
+    const { data } = await gmail.users.settings.sendAs.list({ userId: 'me' });
+    const list = data.sendAs || [];
+    const primary = list.find(s => s.isDefault) || list.find(s => s.isPrimary) || list[0];
+    return primary?.signature || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+// The client sees this as the attachment's name, so derive it from the proposal
+// rather than from whatever the browser called the print-out (Chrome names it
+// after the page title, which made every quote arrive as "HAUSDORFF CRM.pdf").
+function attachmentName(proposal) {
+  const base = (proposal.title || 'הצעת מחיר').replace(/[\\/:*?"<>|]/g, '-').trim();
+  return `${base}.pdf`;
+}
+
 // POST /:id/send-email - email the proposal from the agent's own Gmail
 router.post('/:id/send-email', async (req, res) => {
   try {
@@ -237,7 +273,7 @@ router.post('/:id/send-email', async (req, res) => {
         return res.status(400).json({ error: 'הקובץ המצורף לא נמצא בשרת. העלה אותו מחדש.' });
       }
       attachments.push({
-        filename: proposal.pdf_original_name || 'הצעת מחיר.pdf',
+        filename: attachmentName(proposal),
         path: filePath,
         contentType: 'application/pdf'
       });
@@ -245,17 +281,6 @@ router.post('/:id/send-email', async (req, res) => {
 
     const { google } = require('googleapis');
     const MailComposer = require('nodemailer/lib/mail-composer');
-
-    // Let nodemailer build the MIME (RFC 2047 encoding for the Hebrew subject and
-    // filename, base64 for the attachment); Gmail only wants the finished message.
-    const mime = await new MailComposer({
-      from: user.email,
-      to: toList.join(', '),
-      cc: ccList.length ? ccList.join(', ') : undefined,
-      subject: String(subject).trim(),
-      text: body || '',
-      attachments
-    }).compile().build();
 
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
@@ -266,6 +291,21 @@ router.post('/:id/send-email', async (req, res) => {
     oauth2Client.setCredentials({ refresh_token: user.google_refresh_token });
 
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+    const signature = await fetchGmailSignature(gmail);
+
+    // Let nodemailer build the MIME (RFC 2047 encoding for the Hebrew subject and
+    // filename, base64 for the attachment); Gmail only wants the finished message.
+    // Both parts go out: text for clients that refuse HTML, html for direction.
+    const mime = await new MailComposer({
+      from: user.email,
+      to: toList.join(', '),
+      cc: ccList.length ? ccList.join(', ') : undefined,
+      subject: String(subject).trim(),
+      text: body || '',
+      html: buildHtmlBody(body, signature),
+      attachments
+    }).compile().build();
+
     const sent = await gmail.users.messages.send({
       userId: 'me',
       requestBody: { raw: mime.toString('base64url') }
