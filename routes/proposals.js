@@ -230,6 +230,37 @@ async function fetchGmailSignature(gmail) {
   }
 }
 
+// Record the send on every card it belongs to.
+//
+// The client card reads `activities`; `timeline` is written from nine places and
+// read by no UI at all, which is why sending a proposal used to leave no trace
+// anywhere the agent looks. Write `activities` — and keep mirroring `timeline` the
+// way POST /activities does, so the dashboard's recent-activity feed still sees it.
+//
+// One row per entity, because ActivityTimeline queries by entity: without the
+// contact row the send is invisible on the client card, which is the whole point.
+function logProposalSent(proposal, recipients, user) {
+  const subject = `הצעת מחיר נשלחה במייל: ${proposal.title}`;
+  const summary = `נשלחה אל ${recipients}`;
+
+  const targets = [];
+  if (proposal.contact_id) targets.push(['contact', proposal.contact_id]);
+  if (proposal.deal_id) targets.push(['deal', proposal.deal_id]);
+
+  targets.forEach(([entityType, entityId]) => {
+    run(
+      `INSERT INTO activities (id, entity_type, entity_id, activity_type, subject, summary, created_by)
+       VALUES (?, ?, ?, 'proposal_sent', ?, ?, ?)`,
+      [uuidv4(), entityType, entityId, subject, summary, user?.id || '']
+    );
+  });
+
+  run(
+    `INSERT INTO timeline (id, deal_id, contact_id, type, title, description, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [uuidv4(), proposal.deal_id || null, proposal.contact_id || null, 'proposal_sent', subject, summary, user?.name || 'מנהל']
+  );
+}
+
 // The client sees this as the attachment's name, so derive it from the proposal
 // rather than from whatever the browser called the print-out (Chrome names it
 // after the page title, which made every quote arrive as "HAUSDORFF CRM.pdf").
@@ -312,24 +343,18 @@ router.post('/:id/send-email', async (req, res) => {
     });
 
     const recipients = toList.join(', ');
-    run(
-      `UPDATE proposals SET status='sent', sent_to=?, sent_at=datetime('now'), updated_at=datetime('now') WHERE id=?`,
-      [recipients, req.params.id]
-    );
 
-    if (proposal.deal_id) {
+    // The mail is gone the moment Gmail accepts it. Nothing below may throw a 500,
+    // or the agent will retry a send that already happened and the client gets the
+    // proposal twice.
+    try {
       run(
-        `INSERT INTO timeline (id, deal_id, contact_id, type, title, description, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          uuidv4(),
-          proposal.deal_id,
-          proposal.contact_id || null,
-          'document',
-          `הצעת מחיר נשלחה במייל: ${proposal.title}`,
-          `נשלחה אל ${recipients}`,
-          req.user?.name || 'מנהל',
-        ]
+        `UPDATE proposals SET status='sent', sent_to=?, sent_at=datetime('now'), updated_at=datetime('now') WHERE id=?`,
+        [recipients, req.params.id]
       );
+      logProposalSent(proposal, recipients, req.user);
+    } catch (e) {
+      console.error('proposal sent but logging failed:', e.message);
     }
 
     res.json({

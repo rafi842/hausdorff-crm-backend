@@ -3,11 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
-
-const STAGE_NAMES = {
-  1: 'פנייה', 2: 'גילוי עניין', 3: 'פגישה', 4: 'הצעה / עקרונות',
-  5: 'מו"מ חוזה', 6: 'חתום', 7: 'לא רלוונטי'
-};
+const { STAGE_NAMES, STAGE_SIGNED, STAGE_NEGOTIATION, OPEN_STAGES } = require('../utils/stages');
 
 router.get('/', authMiddleware, (req, res) => {
   try {
@@ -55,10 +51,13 @@ router.get('/at-risk', authMiddleware, (req, res) => {
       FROM deals d
       LEFT JOIN contacts c ON d.contact_id = c.id
       LEFT JOIN properties p ON d.property_id = p.id
-      WHERE d.stage BETWEEN 1 AND 5
+      WHERE d.stage IN (${OPEN_STAGES.join(',')})
       AND (
         (julianday('now') - julianday(d.updated_at)) >= 14
-        OR (d.stage IN (5, 6) AND (
+        -- Contract negotiation only: silence costs most here. This read
+        -- IN (5, 6) under the old 9-stage enum, but 6 is now חתום/signed and
+        -- could never pass the filter above, so the branch was dead.
+        OR (d.stage = ${STAGE_NEGOTIATION} AND (
           (SELECT MAX(created_at) FROM activities
            WHERE entity_type='deal' AND entity_id=d.id) IS NULL
           OR (julianday('now') - julianday(
@@ -89,7 +88,7 @@ router.get('/commissions', authMiddleware, (req, res) => {
       LEFT JOIN companies comp ON c.company_id = comp.id
       LEFT JOIN properties p ON d.property_id = p.id
       LEFT JOIN projects proj ON p.project_id = proj.id
-      WHERE d.stage = 6
+      WHERE d.stage = ${STAGE_SIGNED}
       ORDER BY COALESCE(d.actual_close_date, d.updated_at) DESC
     `);
     const rows = deals.map(d => {
@@ -194,7 +193,17 @@ router.patch('/:id/stage', authMiddleware, (req, res) => {
     if (!existing) return res.status(404).json({ error: 'Deal not found' });
     const now = new Date().toISOString();
 
-    run(`UPDATE deals SET stage=?,updated_at=? WHERE id=?`, [stage, now, req.params.id]);
+    // Signing IS closing, and dragging the card is the only way anyone marks a
+    // deal won — no form anywhere writes actual_close_date. Without stamping it
+    // here, every commission KPI that windows by close date (this week, this
+    // month) stays at 0 forever no matter how many deals are signed.
+    const isSigning = Number(stage) === STAGE_SIGNED && Number(existing.stage) !== STAGE_SIGNED;
+    if (isSigning && !existing.actual_close_date) {
+      run(`UPDATE deals SET stage=?,actual_close_date=?,updated_at=? WHERE id=?`,
+        [stage, now.split('T')[0], now, req.params.id]);
+    } else {
+      run(`UPDATE deals SET stage=?,updated_at=? WHERE id=?`, [stage, now, req.params.id]);
+    }
 
     const tlId = uuidv4();
     run(`INSERT INTO timeline (id,deal_id,type,title,description,created_by,created_at) VALUES (?,?,?,?,?,?,?)`,
@@ -208,8 +217,19 @@ router.patch('/:id/stage', authMiddleware, (req, res) => {
 
 router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
   try {
+    const existing = get('SELECT id FROM deals WHERE id = ?', [req.params.id]);
+    if (!existing) return res.status(404).json({ error: 'Deal not found' });
+
+    // sql.js has no transactions and no FK cascade, so every child has to be
+    // swept by hand or it survives as an orphan pointing at a dead deal.
     run('DELETE FROM timeline WHERE deal_id = ?', [req.params.id]);
     run('DELETE FROM tasks WHERE deal_id = ?', [req.params.id]);
+    run(`DELETE FROM activities WHERE entity_type = 'deal' AND entity_id = ?`, [req.params.id]);
+    run('DELETE FROM meeting_attendees WHERE meeting_id IN (SELECT id FROM meetings WHERE deal_id = ?)', [req.params.id]);
+    run('DELETE FROM meetings WHERE deal_id = ?', [req.params.id]);
+    // Proposals outlive the deal — they belong to the client, and one may have
+    // already gone out by email. Unlink instead of destroying the record.
+    run(`UPDATE proposals SET deal_id = NULL WHERE deal_id = ?`, [req.params.id]);
     run('DELETE FROM deals WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {

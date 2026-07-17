@@ -3,6 +3,7 @@ const router = express.Router();
 const { get, all, run } = require('../database');
 const { v4: uuidv4 } = require('uuid');
 const { authMiddleware } = require('../middleware/auth');
+const { SQL_OPEN, SQL_SIGNED } = require('../utils/stages');
 
 router.get('/stats', authMiddleware, (req, res) => {
   try {
@@ -21,24 +22,24 @@ router.get('/stats', authMiddleware, (req, res) => {
     // Get start of month
     const monthStart = `${today.substring(0, 7)}-01`;
 
-    const totalDeals = get(`SELECT COUNT(*) as count FROM deals WHERE stage NOT IN (8, 9)`);
-    const closedDeals = get(`SELECT COUNT(*) as count, SUM(value) as total_value, SUM(commission_value) as total_commission FROM deals WHERE stage = 8`);
+    const totalDeals = get(`SELECT COUNT(*) as count FROM deals WHERE ${SQL_OPEN}`);
+    const closedDeals = get(`SELECT COUNT(*) as count, SUM(value) as total_value, SUM(commission_value) as total_commission FROM deals WHERE ${SQL_SIGNED}`);
     const totalContacts = get(`SELECT COUNT(*) as count FROM contacts WHERE contact_category = 'contact'`);
     const totalLeads = get(`SELECT COUNT(*) as count FROM contacts WHERE contact_category = 'lead'`);
     const totalProperties = get(`SELECT COUNT(*) as count FROM properties WHERE status = 'זמין'`);
-    const pipelineValue = get(`SELECT SUM(value) as total FROM deals WHERE stage NOT IN (8, 9)`);
+    const pipelineValue = get(`SELECT SUM(value) as total FROM deals WHERE ${SQL_OPEN}`);
     const overdueTasks = get(`SELECT COUNT(*) as count FROM tasks WHERE due_date < '${today}' AND completed = 0`);
     const dueTodayTasks = get(`SELECT COUNT(*) as count FROM tasks WHERE due_date = '${today}' AND completed = 0`);
 
     // This week closed deals
-    const weekClosedDeals = get(`SELECT COUNT(*) as count, SUM(commission_value) as total_commission FROM deals WHERE stage = 8 AND actual_close_date >= '${weekStartStr}' AND actual_close_date <= '${weekEndStr}'`);
+    const weekClosedDeals = get(`SELECT COUNT(*) as count, SUM(commission_value) as total_commission FROM deals WHERE ${SQL_SIGNED} AND actual_close_date >= '${weekStartStr}' AND actual_close_date <= '${weekEndStr}'`);
 
     // This month commission
-    const monthCommission = get(`SELECT SUM(commission_value) as total FROM deals WHERE stage = 8 AND actual_close_date >= '${monthStart}'`);
+    const monthCommission = get(`SELECT SUM(commission_value) as total FROM deals WHERE ${SQL_SIGNED} AND actual_close_date >= '${monthStart}'`);
 
     const dealsByStage = all(`
       SELECT stage, COUNT(*) as count, SUM(value) as total_value
-      FROM deals WHERE stage NOT IN (8, 9)
+      FROM deals WHERE ${SQL_OPEN}
       GROUP BY stage ORDER BY stage
     `);
 
@@ -49,7 +50,7 @@ router.get('/stats', authMiddleware, (req, res) => {
         SUM(value) as total_value,
         SUM(commission_value) as total_commission
       FROM deals
-      WHERE stage = 8 AND actual_close_date IS NOT NULL AND actual_close_date != ''
+      WHERE ${SQL_SIGNED} AND actual_close_date IS NOT NULL AND actual_close_date != ''
       GROUP BY substr(actual_close_date, 1, 7)
       ORDER BY month ASC
     `);
@@ -58,9 +59,9 @@ router.get('/stats', authMiddleware, (req, res) => {
       SELECT
         assigned_to,
         COUNT(*) as total_deals,
-        SUM(CASE WHEN stage = 8 THEN 1 ELSE 0 END) as closed_deals,
-        SUM(CASE WHEN stage = 8 THEN commission_value ELSE 0 END) as total_commission,
-        SUM(CASE WHEN stage NOT IN (8,9) THEN value ELSE 0 END) as pipeline_value
+        SUM(CASE WHEN ${SQL_SIGNED} THEN 1 ELSE 0 END) as closed_deals,
+        SUM(CASE WHEN ${SQL_SIGNED} THEN commission_value ELSE 0 END) as total_commission,
+        SUM(CASE WHEN ${SQL_OPEN} THEN value ELSE 0 END) as pipeline_value
       FROM deals
       GROUP BY assigned_to
       ORDER BY total_commission DESC
