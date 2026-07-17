@@ -151,12 +151,16 @@ router.get('/status', authMiddleware, (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const connected = !!(user.google_refresh_token && user.google_refresh_token !== '');
+    const scopes = user.google_scopes || '';
     res.json({
       connected,
       calendar_sync_enabled: !!(user.calendar_sync_enabled),
-      // Tokens minted before gmail.send was requested stay valid for calendar but
-      // cannot send mail; the UI uses this to prompt a one-time reconnect.
-      gmail_enabled: connected && (user.google_scopes || '').includes('gmail.send')
+      // Reported separately because they fail differently: without gmail.send there
+      // is no send at all, while without settings.basic the mail goes out fine and
+      // merely loses its signature. Collapsing them would either block sends that
+      // work or hide a silent degradation.
+      gmail_enabled: connected && scopes.includes('gmail.send'),
+      signature_enabled: connected && scopes.includes('gmail.settings.basic')
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -33,7 +33,7 @@ router.get('/:id', authMiddleware, (req, res) => {
   }
 });
 
-router.get('/:id/properties', (req, res) => {
+router.get('/:id/properties', authMiddleware, (req, res) => {
   try {
     res.json(all('SELECT * FROM properties WHERE project_id = ? ORDER BY floor', [req.params.id]));
   } catch (err) {
