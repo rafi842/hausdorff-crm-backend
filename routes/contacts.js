@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { fetchCorrespondence } = require('../services/gmail');
 
 // GET all contacts (or leads)
 router.get('/', authMiddleware, (req, res) => {
@@ -284,6 +285,69 @@ router.patch('/:id/mark-contacted', authMiddleware, (req, res) => {
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /:id/emails — filed correspondence, newest first
+router.get('/:id/emails', authMiddleware, (req, res) => {
+  try {
+    res.json(all(
+      `SELECT * FROM email_messages WHERE contact_id = ? ORDER BY sent_at DESC`,
+      [req.params.id]
+    ));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /:id/sync-emails — pull this contact's Gmail correspondence and file it.
+// Idempotent: gmail_id is UNIQUE, so re-syncing only adds what's new.
+router.post('/:id/sync-emails', authMiddleware, async (req, res) => {
+  try {
+    const contact = get('SELECT * FROM contacts WHERE id = ?', [req.params.id]);
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+    if (!contact.email) return res.status(400).json({ error: 'לאיש הקשר אין כתובת מייל' });
+
+    const user = get('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    if (!user || !user.google_refresh_token) {
+      return res.status(400).json({ error: 'חשבון Google לא מחובר. חבר אותו בהגדרות.' });
+    }
+    if (!(user.google_scopes || '').includes('gmail.readonly')) {
+      return res.status(400).json({ error: 'חסרה הרשאת קריאת מיילים. התחבר מחדש ל-Google בהגדרות.' });
+    }
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      return res.status(400).json({ error: 'Google לא מוגדר בשרת' });
+    }
+
+    const { messages, capped } = await fetchCorrespondence({
+      refreshToken: user.google_refresh_token,
+      contactEmail: contact.email,
+      userEmail: user.email,
+    });
+
+    let added = 0;
+    for (const m of messages) {
+      // INSERT OR IGNORE on the UNIQUE gmail_id makes re-sync cheap and safe.
+      const result = run(
+        `INSERT OR IGNORE INTO email_messages
+           (id, gmail_id, thread_id, contact_id, company_id, direction, from_addr, to_addr, subject, snippet, body_text, sent_at, synced_by)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [uuidv4(), m.gmail_id, m.thread_id, contact.id, contact.company_id || null,
+         m.direction, m.from_addr, m.to_addr, m.subject, m.snippet, m.body_text, m.sent_at, req.user.id]
+      );
+      if (result && result.changes) added += result.changes;
+    }
+    if (capped) console.log(`[email-sync] contact ${contact.id}: hit the fetch cap; older mail not pulled this run`);
+
+    res.json({
+      added,
+      total: get('SELECT COUNT(*) c FROM email_messages WHERE contact_id = ?', [contact.id]).c,
+      capped,
+      emails: all(`SELECT * FROM email_messages WHERE contact_id = ? ORDER BY sent_at DESC`, [contact.id]),
+    });
+  } catch (err) {
+    const detail = err?.response?.data?.error?.message || err.message;
+    res.status(500).json({ error: `סנכרון המיילים נכשל: ${detail}` });
   }
 });
 

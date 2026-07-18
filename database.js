@@ -530,6 +530,30 @@ async function initializeDatabase() {
     );
   `);
 
+  // ── Filed email correspondence ─────────────────────────────────────────────
+  // A contact's Gmail thread, synced on demand and filed on their card. gmail_id
+  // is Gmail's own message id and is UNIQUE so re-syncing the same thread can
+  // INSERT OR IGNORE without duplicating. body_text is the extracted plaintext —
+  // small enough to keep inline (and searchable); attachments/HTML stay in Gmail.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS email_messages (
+      id TEXT PRIMARY KEY,
+      gmail_id TEXT UNIQUE,
+      thread_id TEXT DEFAULT '',
+      contact_id TEXT,
+      company_id TEXT,
+      direction TEXT DEFAULT 'in',
+      from_addr TEXT DEFAULT '',
+      to_addr TEXT DEFAULT '',
+      subject TEXT DEFAULT '',
+      snippet TEXT DEFAULT '',
+      body_text TEXT DEFAULT '',
+      sent_at TEXT DEFAULT '',
+      synced_by TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
   saveDb();
 
   // ── Run migrations for existing DB ─────────────────────────────────────────

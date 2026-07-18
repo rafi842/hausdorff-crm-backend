@@ -42,10 +42,12 @@ router.post('/auth', authMiddleware, (req, res) => {
       // gmail.settings.basic is read-only here: it fetches the agent's real Gmail
       // signature so sent proposals look identical to mail they send by hand.
       // Gmail only appends signatures in its own UI, never to API-sent messages.
+      // gmail.readonly lets the CRM file a contact's correspondence onto their card.
       scope: [
         'https://www.googleapis.com/auth/calendar.events',
         'https://www.googleapis.com/auth/gmail.send',
-        'https://www.googleapis.com/auth/gmail.settings.basic'
+        'https://www.googleapis.com/auth/gmail.settings.basic',
+        'https://www.googleapis.com/auth/gmail.readonly'
       ],
       // Signed, short-lived state binds the callback to this user and prevents
       // an attacker from linking their Google account to someone else's record.
@@ -160,7 +162,9 @@ router.get('/status', authMiddleware, (req, res) => {
       // merely loses its signature. Collapsing them would either block sends that
       // work or hide a silent degradation.
       gmail_enabled: connected && scopes.includes('gmail.send'),
-      signature_enabled: connected && scopes.includes('gmail.settings.basic')
+      signature_enabled: connected && scopes.includes('gmail.settings.basic'),
+      // Reading a contact's correspondence to file it on their card.
+      email_read_enabled: connected && scopes.includes('gmail.readonly')
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

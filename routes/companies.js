@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { fetchCorrespondence } = require('../services/gmail');
 
 router.get('/', authMiddleware, (req, res) => {
   try {
@@ -121,11 +122,76 @@ router.get('/:id/overview', authMiddleware, (req, res) => {
       signed_deals: deals.filter(d => d.stage === 6).length,
       pipeline_value: deals.filter(d => [1, 2, 3, 4, 5].includes(d.stage)).reduce((s, d) => s + (d.value || 0), 0),
       open_tasks: tasks.filter(t => !t.completed).length,
+      emails: get(`SELECT COUNT(*) c FROM email_messages WHERE contact_id IN (SELECT id FROM contacts WHERE company_id = ?)`, [cid]).c,
     };
 
     res.json({ company, contacts, deals, tasks, meetings, stats });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /:id/emails — correspondence across all the chain's reps, newest first.
+router.get('/:id/emails', authMiddleware, (req, res) => {
+  try {
+    res.json(all(`
+      SELECT e.*, c.first_name || ' ' || c.last_name AS contact_name
+      FROM email_messages e
+      LEFT JOIN contacts c ON e.contact_id = c.id
+      WHERE e.contact_id IN (SELECT id FROM contacts WHERE company_id = ?)
+      ORDER BY e.sent_at DESC
+    `, [req.params.id]));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /:id/sync-emails — sync every rep of the chain in one go.
+router.post('/:id/sync-emails', authMiddleware, async (req, res) => {
+  try {
+    const company = get('SELECT * FROM companies WHERE id = ?', [req.params.id]);
+    if (!company) return res.status(404).json({ error: 'Company not found' });
+
+    const user = get('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    if (!user || !user.google_refresh_token) {
+      return res.status(400).json({ error: 'חשבון Google לא מחובר. חבר אותו בהגדרות.' });
+    }
+    if (!(user.google_scopes || '').includes('gmail.readonly')) {
+      return res.status(400).json({ error: 'חסרה הרשאת קריאת מיילים. התחבר מחדש ל-Google בהגדרות.' });
+    }
+
+    const contacts = all('SELECT * FROM contacts WHERE company_id = ? AND email != ""', [req.params.id]);
+    let added = 0;
+    for (const contact of contacts) {
+      const { messages } = await fetchCorrespondence({
+        refreshToken: user.google_refresh_token,
+        contactEmail: contact.email,
+        userEmail: user.email,
+      });
+      for (const m of messages) {
+        const result = run(
+          `INSERT OR IGNORE INTO email_messages
+             (id, gmail_id, thread_id, contact_id, company_id, direction, from_addr, to_addr, subject, snippet, body_text, sent_at, synced_by)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [uuidv4(), m.gmail_id, m.thread_id, contact.id, contact.company_id || null,
+           m.direction, m.from_addr, m.to_addr, m.subject, m.snippet, m.body_text, m.sent_at, req.user.id]
+        );
+        if (result && result.changes) added += result.changes;
+      }
+    }
+
+    res.json({
+      added,
+      reps_synced: contacts.length,
+      emails: all(`
+        SELECT e.*, c.first_name || ' ' || c.last_name AS contact_name
+        FROM email_messages e LEFT JOIN contacts c ON e.contact_id = c.id
+        WHERE e.contact_id IN (SELECT id FROM contacts WHERE company_id = ?)
+        ORDER BY e.sent_at DESC`, [req.params.id]),
+    });
+  } catch (err) {
+    const detail = err?.response?.data?.error?.message || err.message;
+    res.status(500).json({ error: `סנכרון המיילים נכשל: ${detail}` });
   }
 });
 
