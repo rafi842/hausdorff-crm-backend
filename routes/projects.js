@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 const { resolveOccupancyStatus } = require('../utils/occupancy');
 
 router.get('/', authMiddleware, (req, res) => {
@@ -19,7 +20,7 @@ router.get('/', authMiddleware, (req, res) => {
     query += ' ORDER BY p.created_at DESC';
     res.json(all(query, params));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -29,7 +30,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     if (!project) return res.status(404).json({ error: 'Project not found' });
     res.json(project);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -37,7 +38,7 @@ router.get('/:id/properties', authMiddleware, (req, res) => {
   try {
     res.json(all('SELECT * FROM properties WHERE project_id = ? ORDER BY floor', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -51,7 +52,7 @@ router.post('/', authMiddleware, (req, res) => {
     run(`UPDATE projects SET gross_net_ratio=?,mgmt_fee_per_sqm=? WHERE id=?`, [gross_net_ratio||0, mgmt_fee_per_sqm != null ? mgmt_fee_per_sqm : 35, id]);
     res.status(201).json(get('SELECT * FROM projects WHERE id = ?', [id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -64,7 +65,7 @@ router.put('/:id', authMiddleware, (req, res) => {
     run(`UPDATE projects SET gross_net_ratio=?,mgmt_fee_per_sqm=? WHERE id=?`, [gross_net_ratio||0, mgmt_fee_per_sqm != null ? mgmt_fee_per_sqm : 35, req.params.id]);
     res.json(get('SELECT * FROM projects WHERE id = ?', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -73,7 +74,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
     run('DELETE FROM projects WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -174,7 +175,7 @@ router.get('/:id/marketing-report', authMiddleware, (req, res) => {
 
     res.json({ project, from: from || '', to: to || '', units, deals, activities, summary, proforma, floorPlans });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

@@ -3,6 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const { run, get, all, getDb } = require('../database');
 const { authMiddleware, JWT_SECRET } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 // The redirect URI must byte-match the one registered in the Google Cloud
 // console. GOOGLE_REDIRECT_URI wins so the registered value can be pinned
@@ -56,7 +57,7 @@ router.post('/auth', authMiddleware, (req, res) => {
 
     res.json({ authUrl });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -98,7 +99,11 @@ router.get('/callback', async (req, res) => {
     const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
     res.redirect(`${frontendUrl}/settings`);
   } catch (err) {
-    res.status(500).send('OAuth callback error: ' + err.message);
+    // Rendered straight to the user's browser after the Google redirect — don't
+    // echo the raw error. Log it, send them back to settings to retry.
+    console.error('[oauth callback]', err && err.stack ? err.stack : err);
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+    res.redirect(`${frontendUrl}/settings?google=error`);
   }
 });
 
@@ -142,7 +147,7 @@ router.post('/create-event', authMiddleware, async (req, res) => {
       htmlLink: event.data.htmlLink
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -167,7 +172,7 @@ router.get('/status', authMiddleware, (req, res) => {
       email_read_enabled: connected && scopes.includes('gmail.readonly')
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -185,7 +190,7 @@ router.post('/disconnect', authMiddleware, (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -230,7 +235,7 @@ router.post('/generate-ics', authMiddleware, (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="meeting-${Date.now()}.ics"`);
     res.send(content);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

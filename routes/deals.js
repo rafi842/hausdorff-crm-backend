@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 const { STAGE_NAMES, STAGE_SIGNED, STAGE_NEGOTIATION, OPEN_STAGES } = require('../utils/stages');
 
 router.get('/', authMiddleware, (req, res) => {
@@ -32,7 +33,7 @@ router.get('/', authMiddleware, (req, res) => {
     query += ' ORDER BY d.updated_at DESC';
     res.json(all(query, params));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -71,7 +72,7 @@ router.get('/at-risk', authMiddleware, (req, res) => {
     `);
     res.json(deals);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -107,7 +108,7 @@ router.get('/commissions', authMiddleware, (req, res) => {
     const total = rows.reduce((s, r) => s + r.commission, 0);
     res.json({ rows, total, count: rows.length });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -134,7 +135,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     if (!deal) return res.status(404).json({ error: 'Deal not found' });
     res.json(deal);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -156,7 +157,7 @@ router.post('/', authMiddleware, (req, res) => {
 
     res.status(201).json(get('SELECT * FROM deals WHERE id = ?', [id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -182,7 +183,7 @@ router.put('/:id', authMiddleware, (req, res) => {
 
     res.json(get('SELECT * FROM deals WHERE id = ?', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -211,7 +212,7 @@ router.patch('/:id/stage', authMiddleware, (req, res) => {
 
     res.json(get('SELECT * FROM deals WHERE id = ?', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -233,7 +234,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
     run('DELETE FROM deals WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -241,7 +242,7 @@ router.get('/:id/tasks', authMiddleware, (req, res) => {
   try {
     res.json(all('SELECT * FROM tasks WHERE deal_id = ? ORDER BY due_date ASC', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -249,7 +250,7 @@ router.get('/:id/timeline', authMiddleware, (req, res) => {
   try {
     res.json(all('SELECT * FROM timeline WHERE deal_id = ? ORDER BY created_at DESC', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -262,7 +263,7 @@ router.post('/:id/timeline', authMiddleware, (req, res) => {
       [id, req.params.id, type||'note', title, description||'', created_by||'מנהל', now]);
     res.status(201).json(get('SELECT * FROM timeline WHERE id = ?', [id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

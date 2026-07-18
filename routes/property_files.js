@@ -6,6 +6,7 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -46,7 +47,7 @@ const upload = multer({
 router.get('/list/:propertyId', authMiddleware, (req, res) => {
   try {
     res.json(all('SELECT * FROM property_files WHERE property_id=? ORDER BY uploaded_at DESC', [req.params.propertyId]));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: safeError(err) }); }
 });
 
 // POST /api/property-files/:propertyId/upload — upload file
@@ -61,7 +62,7 @@ router.post('/:propertyId/upload', authMiddleware, upload.single('file'), (req, 
        `/uploads/${req.file.filename}`, req.file.mimetype,
        category || 'מסמכים נוספים', req.file.size, now]);
     res.status(201).json(get('SELECT * FROM property_files WHERE id=?', [id]));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: safeError(err) }); }
 });
 
 // GET /api/property-files/:id/preview — view file inline (no download)
@@ -75,7 +76,7 @@ router.get('/:id/preview', authMiddleware, (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Type', safeContentType(file.file_name));
     res.sendFile(filePath);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: safeError(err) }); }
 });
 
 // GET /api/property-files/:id/download — download file
@@ -89,7 +90,7 @@ router.get('/:id/download', authMiddleware, (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Type', safeContentType(file.file_name));
     res.sendFile(filePath);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: safeError(err) }); }
 });
 
 // DELETE /api/property-files/:id — delete file
@@ -102,7 +103,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
       run('DELETE FROM property_files WHERE id=?', [req.params.id]);
     }
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { res.status(500).json({ error: safeError(err) }); }
 });
 
 module.exports = router;

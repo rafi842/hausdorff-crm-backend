@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 const { fetchCorrespondence } = require('../services/gmail');
 
 router.get('/', authMiddleware, (req, res) => {
@@ -18,7 +19,7 @@ router.get('/', authMiddleware, (req, res) => {
     query += ' ORDER BY name ASC';
     res.json(all(query, params));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -28,7 +29,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     if (!company) return res.status(404).json({ error: 'Company not found' });
     res.json(company);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -45,7 +46,7 @@ router.post('/', authMiddleware, (req, res) => {
       [business_category||'', business_subcategory||'', branch_count||0, target_area_min||0, target_area_max||0, rent_budget_per_sqm||0, chain_status||'פוטנציאלי', expansion_notes||'', id]);
     res.status(201).json(get('SELECT * FROM companies WHERE id = ?', [id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -61,7 +62,7 @@ router.put('/:id', authMiddleware, (req, res) => {
       [business_category||'', business_subcategory||'', branch_count||0, target_area_min||0, target_area_max||0, rent_budget_per_sqm||0, chain_status||'פוטנציאלי', expansion_notes||'', req.params.id]);
     res.json(get('SELECT * FROM companies WHERE id = ?', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -70,7 +71,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
     run('DELETE FROM companies WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -127,7 +128,7 @@ router.get('/:id/overview', authMiddleware, (req, res) => {
 
     res.json({ company, contacts, deals, tasks, meetings, stats });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -142,7 +143,7 @@ router.get('/:id/emails', authMiddleware, (req, res) => {
       ORDER BY e.sent_at DESC
     `, [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

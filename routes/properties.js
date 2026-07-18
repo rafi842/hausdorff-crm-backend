@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 const { resolveOccupancyStatus } = require('../utils/occupancy');
 
 router.get('/', authMiddleware, (req, res) => {
@@ -31,7 +32,7 @@ router.get('/', authMiddleware, (req, res) => {
     const rows = all(query, params).map(p => ({ ...p, occupancy_status: resolveOccupancyStatus(p) }));
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -53,7 +54,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     const files = all(`SELECT * FROM property_files WHERE property_id=? ORDER BY uploaded_at DESC`, [req.params.id]);
     res.json({ ...property, occupancy_status: resolveOccupancyStatus(property), attachments, property_files: files });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -85,7 +86,7 @@ router.post('/', authMiddleware, (req, res) => {
        target_profile||'', internal_note||'', turnover_pct||0, min_turnover||0, occupancy_status||'', occupancy_status_manual ? 1 : 0, map_polygon||'', id]);
     res.status(201).json(get('SELECT * FROM properties WHERE id = ?', [id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -116,7 +117,7 @@ router.put('/:id', authMiddleware, (req, res) => {
        target_profile||'', internal_note||'', turnover_pct||0, min_turnover||0, occupancy_status||'', occupancy_status_manual ? 1 : 0, map_polygon||'', req.params.id]);
     res.json(get('SELECT * FROM properties WHERE id = ?', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -125,7 +126,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
     run('DELETE FROM properties WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -136,7 +137,7 @@ router.put('/:id/polygon', authMiddleware, (req, res) => {
     run('UPDATE properties SET map_polygon = ? WHERE id = ?', [req.body.map_polygon || '', req.params.id]);
     res.json(get('SELECT * FROM properties WHERE id = ?', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -146,7 +147,7 @@ router.put('/:id/marketing-plan', authMiddleware, (req, res) => {
     run('UPDATE properties SET marketing_plan = ? WHERE id = ?', [req.body.marketing_plan || '', req.params.id]);
     res.json(get('SELECT * FROM properties WHERE id = ?', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -209,7 +210,7 @@ router.post('/:id/smart-match', authMiddleware, (req, res) => {
     scored.sort((a, b) => b.match_score - a.match_score);
     res.json(scored.filter(c => c.match_score >= 50));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -260,7 +261,7 @@ router.get('/:id/chain-match', authMiddleware, (req, res) => {
 
     res.json(scored);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

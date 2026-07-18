@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 router.get('/', authMiddleware, (req, res) => {
   try {
@@ -23,7 +24,7 @@ router.get('/', authMiddleware, (req, res) => {
     if (limit) { query += ` LIMIT ${parseInt(limit)}`; }
     res.json(all(query, params));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -36,7 +37,7 @@ router.post('/', authMiddleware, (req, res) => {
       [id, deal_id||null, contact_id||null, type||'note', title, description||'', created_by||'מנהל', now]);
     res.status(201).json(get('SELECT * FROM timeline WHERE id = ?', [id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -45,7 +46,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
     run('DELETE FROM timeline WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

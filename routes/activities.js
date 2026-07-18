@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all, getDb } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 // GET all activities
 router.get('/', authMiddleware, (req, res) => {
@@ -40,7 +41,7 @@ router.get('/', authMiddleware, (req, res) => {
 
     res.json(all(query, params));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -56,7 +57,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     if (!activity) return res.status(404).json({ error: 'Activity not found' });
     res.json(activity);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -106,7 +107,7 @@ router.post('/', authMiddleware, (req, res) => {
     const activity = get('SELECT * FROM activities WHERE id = ?', [id]);
     res.status(201).json(activity);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -139,7 +140,7 @@ router.put('/:id', authMiddleware, (req, res) => {
     `, [req.params.id]);
     res.json(updated);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -151,7 +152,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
     run('DELETE FROM activities WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

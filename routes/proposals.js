@@ -6,6 +6,7 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all, saveDb } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 // All routes require auth
 router.use(authMiddleware);
@@ -50,7 +51,7 @@ router.get('/', (req, res) => {
     `, params);
     res.json(proposals);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -67,7 +68,7 @@ router.get('/:id', (req, res) => {
     if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
     res.json(proposal);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -88,7 +89,7 @@ router.post('/', (req, res) => {
     const proposal = get('SELECT * FROM proposals WHERE id = ?', [id]);
     res.status(201).json(proposal);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -113,7 +114,7 @@ router.put('/:id', (req, res) => {
     `, [req.params.id]);
     res.json(proposal);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -125,7 +126,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
     run('DELETE FROM proposals WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -163,7 +164,7 @@ router.post('/:id/pdf', upload.single('file'), (req, res) => {
     );
     res.json(get('SELECT * FROM proposals WHERE id = ?', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -177,7 +178,7 @@ router.get('/:id/pdf', (req, res) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.sendFile(filePath);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -194,7 +195,7 @@ router.delete('/:id/pdf', (req, res) => {
     );
     res.json(get('SELECT * FROM proposals WHERE id = ?', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -395,7 +396,7 @@ router.post('/:id/send', (req, res) => {
     const proposal = get('SELECT * FROM proposals WHERE id = ?', [req.params.id]);
     res.json(proposal);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

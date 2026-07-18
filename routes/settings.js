@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 3 * 1024 * 1024 } });
 
@@ -14,7 +15,7 @@ router.get('/', authMiddleware, (req, res) => {
     rows.forEach(r => { out[r.key] = r.value; });
     res.json(out);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -30,7 +31,7 @@ router.post('/logo', authMiddleware, adminOnly, upload.single('logo'), (req, res
     else run(`INSERT INTO app_settings (key, value) VALUES ('company_logo', ?)`, [dataUri]);
     res.json({ company_logo: dataUri });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -40,7 +41,7 @@ router.delete('/logo', authMiddleware, adminOnly, (req, res) => {
     run(`DELETE FROM app_settings WHERE key = 'company_logo'`);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -57,7 +58,7 @@ router.post('/letterhead', authMiddleware, adminOnly, uploadLetter.single('lette
     else run(`INSERT INTO app_settings (key, value) VALUES ('company_letterhead', ?)`, [dataUri]);
     res.json({ company_letterhead: dataUri });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 router.delete('/letterhead', authMiddleware, adminOnly, (req, res) => {
@@ -65,7 +66,7 @@ router.delete('/letterhead', authMiddleware, adminOnly, (req, res) => {
     run(`DELETE FROM app_settings WHERE key = 'company_letterhead'`);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

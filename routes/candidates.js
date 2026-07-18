@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 // GET /api/unit-candidates?property_id=... — proposed-mix shortlist for a unit.
 // Enriches each candidate with the live chain status/category from companies.
@@ -29,7 +30,7 @@ router.get('/', authMiddleware, (req, res) => {
     });
     res.json(out);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -55,7 +56,7 @@ router.post('/', authMiddleware, (req, res) => {
       [id, property_id, company_id || null, name, cat, note || '', candidate_status || 'הוצע', rank || 0]);
     res.status(201).json(get('SELECT * FROM unit_candidates WHERE id = ?', [id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -75,7 +76,7 @@ router.put('/:id', authMiddleware, (req, res) => {
        req.params.id]);
     res.json(get('SELECT * FROM unit_candidates WHERE id = ?', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -85,7 +86,7 @@ router.delete('/:id', authMiddleware, (req, res) => {
     run('DELETE FROM unit_candidates WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -117,7 +118,7 @@ router.post('/:id/promote', authMiddleware, (req, res) => {
     run(`UPDATE unit_candidates SET deal_id=?, candidate_status=? WHERE id=?`, [dealId, 'הועבר למו"מ', req.params.id]);
     res.status(201).json({ candidate: get('SELECT * FROM unit_candidates WHERE id = ?', [req.params.id]), deal: get('SELECT * FROM deals WHERE id = ?', [dealId]) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

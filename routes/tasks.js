@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 // Helper: enrich tasks with participants
 function attachParticipants(tasks) {
@@ -101,7 +102,7 @@ router.get('/', authMiddleware, (req, res) => {
     const tasks = all(query, params);
     res.json(attachParticipants(tasks));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -112,7 +113,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     const enriched = attachParticipants([task]);
     res.json(enriched[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -144,7 +145,7 @@ router.post('/', authMiddleware, (req, res) => {
     const enriched = attachParticipants([task]);
     res.status(201).json(enriched[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -177,7 +178,7 @@ router.put('/:id', authMiddleware, (req, res) => {
     const enriched = attachParticipants([task]);
     res.json(enriched[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -192,7 +193,7 @@ router.patch('/:id/complete', authMiddleware, (req, res) => {
     const enriched = attachParticipants([updated]);
     res.json(enriched[0]);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -202,7 +203,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
     run('DELETE FROM tasks WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

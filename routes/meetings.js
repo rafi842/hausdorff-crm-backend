@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 // GET all meetings (with filters)
 router.get('/', authMiddleware, (req, res) => {
@@ -34,7 +35,7 @@ router.get('/', authMiddleware, (req, res) => {
 
     res.json(meetings);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -53,7 +54,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     meeting.attendees = all('SELECT * FROM meeting_attendees WHERE meeting_id = ?', [meeting.id]);
     res.json(meeting);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -93,7 +94,7 @@ router.post('/', authMiddleware, (req, res) => {
     meeting.attendees = all('SELECT * FROM meeting_attendees WHERE meeting_id = ?', [id]);
     res.status(201).json(meeting);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -114,7 +115,7 @@ router.put('/:id', authMiddleware, (req, res) => {
     meeting.attendees = all('SELECT * FROM meeting_attendees WHERE meeting_id = ?', [req.params.id]);
     res.json(meeting);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -127,7 +128,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
     run('DELETE FROM meetings WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

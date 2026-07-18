@@ -16,6 +16,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 const { sendWhatsAppMessage } = require('../services/whatsapp');
 
 // ── GET /api/whatsapp/webhook  ─────────────────────────────────────────────
@@ -36,7 +37,7 @@ router.get('/webhook', (req, res) => {
     return res.status(403).json({ error: 'Verification failed' });
   } catch (err) {
     console.error('[WhatsApp] Verify error:', err.message);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -161,7 +162,7 @@ router.get('/logs', authMiddleware, (req, res) => {
     );
     res.json(logs);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

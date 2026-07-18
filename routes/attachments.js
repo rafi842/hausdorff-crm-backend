@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 // GET attachments for an entity
 router.get('/', authMiddleware, (req, res) => {
@@ -15,7 +16,7 @@ router.get('/', authMiddleware, (req, res) => {
     query += ' ORDER BY created_at DESC';
     res.json(all(query, params));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -29,7 +30,7 @@ router.post('/', authMiddleware, (req, res) => {
       [id, entity_type, entity_id, name, file_type||'', category||'אחר', url||'', size||0, req.user.name, now]);
     res.status(201).json(get('SELECT * FROM attachments WHERE id=?', [id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -39,7 +40,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
     run('DELETE FROM attachments WHERE id=?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

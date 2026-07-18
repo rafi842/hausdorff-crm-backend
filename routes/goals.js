@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all, getDb } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 // GET goal progress for a user
 router.get('/progress', authMiddleware, (req, res) => {
@@ -63,7 +64,7 @@ router.get('/progress', authMiddleware, (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -138,7 +139,7 @@ router.get('/leaderboard', authMiddleware, (req, res) => {
 
     res.json(leaderboard);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -157,7 +158,7 @@ router.get('/', authMiddleware, (req, res) => {
     query += ` ORDER BY g.year DESC, g.month DESC`;
     res.json(all(query, params));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -208,7 +209,7 @@ router.post('/', authMiddleware, (req, res) => {
     const goal = get('SELECT * FROM agent_goals WHERE id = ?', [id]);
     res.status(201).json(goal);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -219,7 +220,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     if (!goal) return res.status(404).json({ error: 'Goal not found' });
     res.json(goal);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -256,7 +257,7 @@ router.put('/:id', authMiddleware, (req, res) => {
     const goal = get('SELECT * FROM agent_goals WHERE id = ?', [req.params.id]);
     res.json(goal);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -273,7 +274,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
     run('DELETE FROM agent_goals WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

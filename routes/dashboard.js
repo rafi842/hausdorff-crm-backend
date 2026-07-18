@@ -3,6 +3,7 @@ const router = express.Router();
 const { get, all, run } = require('../database');
 const { v4: uuidv4 } = require('uuid');
 const { authMiddleware } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 const { SQL_OPEN, SQL_SIGNED } = require('../utils/stages');
 
 router.get('/stats', authMiddleware, (req, res) => {
@@ -105,7 +106,7 @@ router.get('/stats', authMiddleware, (req, res) => {
       recent_activity: recentActivity,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -124,7 +125,7 @@ router.get('/tasks/upcoming', authMiddleware, (req, res) => {
     `);
     res.json(tasks);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -151,7 +152,7 @@ router.get('/tasks/week', authMiddleware, (req, res) => {
     `, [weekStartStr, weekEndStr]);
     res.json({ tasks, week_start: weekStartStr, week_end: weekEndStr });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -182,7 +183,7 @@ router.get('/match-notifications', authMiddleware, (req, res) => {
     `);
     res.json(notifications);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -191,7 +192,7 @@ router.patch('/match-notifications/:id/seen', authMiddleware, (req, res) => {
     run('UPDATE match_notifications SET seen=1 WHERE id=?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -209,7 +210,7 @@ router.patch('/match-notifications/:id/status', authMiddleware, (req, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -256,7 +257,7 @@ router.post('/match-to-deal', authMiddleware, (req, res) => {
     const deal = get('SELECT * FROM deals WHERE id = ?', [dealId]);
     res.status(201).json({ deal_id: dealId, deal });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const { run, get, all } = require('../database');
 const { authMiddleware } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 // Floor-plan images are stored as data URIs (like the company logo). Plans are a
 // handful per project, so the sql.js full-file writes stay acceptable.
@@ -16,7 +17,7 @@ router.get('/', authMiddleware, (req, res) => {
     if (!project_id) return res.status(400).json({ error: 'project_id required' });
     res.json(all('SELECT * FROM floor_plans WHERE project_id = ? ORDER BY created_at ASC', [project_id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -39,7 +40,7 @@ router.post('/', authMiddleware, upload.single('image'), (req, res) => {
     }
     res.json(get('SELECT * FROM floor_plans WHERE project_id = ? AND floor_label = ?', [project_id, fl]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -49,7 +50,7 @@ router.delete('/:id', authMiddleware, (req, res) => {
     run('DELETE FROM floor_plans WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

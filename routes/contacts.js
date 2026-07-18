@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 const { fetchCorrespondence } = require('../services/gmail');
 
 // GET all contacts (or leads)
@@ -37,7 +38,7 @@ router.get('/', authMiddleware, (req, res) => {
 
     res.json(all(query, params));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -55,7 +56,7 @@ router.get('/hot-leads', authMiddleware, (req, res) => {
     `, [hours]);
     res.json(leads);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -75,7 +76,7 @@ router.get('/:id', authMiddleware, (req, res) => {
     }
     res.json(contact);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -107,7 +108,7 @@ router.post('/', authMiddleware, (req, res) => {
       SELECT c.*, comp.name as company_name FROM contacts c
       LEFT JOIN companies comp ON c.company_id = comp.id WHERE c.id=?`, [id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -141,7 +142,7 @@ router.put('/:id', authMiddleware, (req, res) => {
       SELECT c.*, comp.name as company_name FROM contacts c
       LEFT JOIN companies comp ON c.company_id = comp.id WHERE c.id=?`, [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -155,7 +156,7 @@ router.patch('/:id/convert', authMiddleware, (req, res) => {
       SELECT c.*, comp.name as company_name FROM contacts c
       LEFT JOIN companies comp ON c.company_id = comp.id WHERE c.id=?`, [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -165,7 +166,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
     run('DELETE FROM contacts WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -181,7 +182,7 @@ router.get('/:id/deals', authMiddleware, (req, res) => {
     `, [req.params.id]);
     res.json(deals);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -269,7 +270,7 @@ router.post('/:id/smart-match', authMiddleware, (req, res) => {
     scored.sort((a, b) => b.match_score - a.match_score);
     res.json(scored);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -284,7 +285,7 @@ router.patch('/:id/mark-contacted', authMiddleware, (req, res) => {
     const updated = get('SELECT * FROM contacts WHERE id = ?', [req.params.id]);
     res.json(updated);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -296,7 +297,7 @@ router.get('/:id/emails', authMiddleware, (req, res) => {
       [req.params.id]
     ));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

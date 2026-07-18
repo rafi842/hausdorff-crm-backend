@@ -3,6 +3,7 @@ const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { all, get, run } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 // GET /api/categories — the business-category taxonomy, grouped main → subs.
 router.get('/', authMiddleware, (req, res) => {
@@ -44,7 +45,7 @@ router.post('/', authMiddleware, adminOnly, (req, res) => {
     run('INSERT INTO business_categories (id,name,parent_id,sort_order,active) VALUES (?,?,?,?,1)', [id, name, parentId, sort]);
     res.status(201).json(get('SELECT id, name, parent_id FROM business_categories WHERE id = ?', [id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -56,7 +57,7 @@ router.put('/:id', authMiddleware, adminOnly, (req, res) => {
     run('UPDATE business_categories SET name = ? WHERE id = ?', [name, req.params.id]);
     res.json(get('SELECT id, name, parent_id FROM business_categories WHERE id = ?', [req.params.id]));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -67,7 +68,7 @@ router.delete('/:id', authMiddleware, adminOnly, (req, res) => {
     run('UPDATE business_categories SET active = 0 WHERE id = ? OR parent_id = ?', [req.params.id, req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 

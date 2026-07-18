@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { run, get, all, getDb } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
+const { safeError } = require('../utils/errors');
 
 // Verify the Facebook webhook payload signature (X-Hub-Signature-256).
 // Active only when FACEBOOK_APP_SECRET is configured — set it to reject spoofed
@@ -34,7 +35,7 @@ router.get('/webhook', (req, res) => {
     }
     return res.status(403).json({ error: 'Verification failed' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -183,7 +184,7 @@ router.post('/webhook', (req, res) => {
       `, [logId, 'unknown', JSON.stringify(req.body), err.message]);
     } catch (e) { /* ignore logging error */ }
 
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -228,7 +229,7 @@ router.post('/import-csv', authMiddleware, (req, res) => {
 
     res.json({ imported, errors });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -241,7 +242,7 @@ router.get('/webhook-logs', authMiddleware, (req, res) => {
     const logs = all('SELECT * FROM webhook_logs ORDER BY created_at DESC LIMIT 20');
     res.json(logs);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -257,7 +258,7 @@ router.post('/test-webhook', authMiddleware, (req, res) => {
     const log = get('SELECT * FROM webhook_logs WHERE id = ?', [id]);
     res.json(log);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -272,7 +273,7 @@ router.get('/assignment-rules', authMiddleware, (req, res) => {
     `);
     res.json(rules);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -297,7 +298,7 @@ router.post('/assignment-rules', authMiddleware, (req, res) => {
     const rule = get('SELECT * FROM lead_assignment_rules WHERE id = ?', [id]);
     res.status(201).json(rule);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -326,7 +327,7 @@ router.put('/assignment-rules/:id', authMiddleware, (req, res) => {
     const rule = get('SELECT * FROM lead_assignment_rules WHERE id = ?', [req.params.id]);
     res.json(rule);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -343,7 +344,7 @@ router.delete('/assignment-rules/:id', authMiddleware, adminOnly, (req, res) => 
     run('DELETE FROM lead_assignment_rules WHERE id = ?', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
@@ -361,7 +362,7 @@ router.get('/source-stats', authMiddleware, (req, res) => {
     `);
     res.json(stats);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: safeError(err) });
   }
 });
 
