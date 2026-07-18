@@ -2,73 +2,71 @@ const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
+const Database = require('better-sqlite3');
 
 const DB_PATH = path.resolve(__dirname, process.env.DB_PATH || './crm.db');
 
-let SQL;
 let db;
 
-async function initSQL() {
-  if (SQL) return;
-  const initSqlJs = require('sql.js');
-  SQL = await initSqlJs();
+// better-sqlite3 rejects two kinds of value that sql.js silently tolerated:
+// `undefined` and JS booleans. Every route reaches the engine through run/get/all,
+// so normalising here fixes all call sites at once — undefined→null, boolean→0/1.
+function normParams(params) {
+  return params.map(p => {
+    if (p === undefined) return null;
+    if (typeof p === 'boolean') return p ? 1 : 0;
+    return p;
+  });
 }
 
-function saveDb() {
-  if (!db) return;
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(DB_PATH, buffer);
-}
+// Kept as an export so no caller has to change. It is now a no-op: better-sqlite3
+// writes every statement straight to the file, incrementally — there is no
+// in-memory image to flush, and no whole-file rewrite. This is the core win.
+function saveDb() { /* durable-on-write; nothing to flush */ }
 
 function getDb() {
   return db;
 }
 
 function run(query, params = []) {
-  db.run(query, params);
-  saveDb();
+  return db.prepare(query).run(normParams(params));
 }
 
 function get(query, params = []) {
-  const stmt = db.prepare(query);
-  stmt.bind(params);
-  if (stmt.step()) {
-    const row = stmt.getAsObject();
-    stmt.free();
-    return row;
-  }
-  stmt.free();
-  return undefined;
+  return db.prepare(query).get(normParams(params));
 }
 
 function all(query, params = []) {
-  const stmt = db.prepare(query);
-  stmt.bind(params);
-  const rows = [];
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject());
-  }
-  stmt.free();
-  return rows;
+  return db.prepare(query).all(normParams(params));
 }
 
+// Kept async so `initializeDatabase().then(...)` in server.js still holds, even
+// though better-sqlite3 opens synchronously.
 async function initializeDatabase() {
-  await initSQL();
+  const existed = fs.existsSync(DB_PATH);
 
-  if (fs.existsSync(DB_PATH)) {
-    const fileBuffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(fileBuffer);
-    console.log('Database loaded from file.');
-  } else {
-    db = new SQL.Database();
-    console.log('New database created.');
+  // First boot on the new engine: preserve the exact pre-migration file, once,
+  // on the same volume. The file format is identical across engines, so this
+  // copy is a clean rollback point. Never overwritten on later boots.
+  if (existed) {
+    const preBackup = DB_PATH + '.pre-better-sqlite3.bak';
+    if (!fs.existsSync(preBackup)) {
+      try {
+        fs.copyFileSync(DB_PATH, preBackup);
+        console.log('Pre-migration backup created:', preBackup);
+      } catch (e) {
+        console.error('Pre-migration backup failed (continuing):', e.message);
+      }
+    }
   }
 
-  db.run(`PRAGMA foreign_keys = ON;`);
+  db = new Database(DB_PATH);
+  console.log(existed ? 'Database opened (better-sqlite3).' : 'New database created (better-sqlite3).');
+
+  db.exec(`PRAGMA foreign_keys = ON;`);
 
   // ── Users ──────────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -82,7 +80,7 @@ async function initializeDatabase() {
   `);
 
   // ── Companies ──────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS companies (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -98,7 +96,7 @@ async function initializeDatabase() {
   `);
 
   // ── Contacts ───────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS contacts (
       id TEXT PRIMARY KEY,
       first_name TEXT NOT NULL,
@@ -127,7 +125,7 @@ async function initializeDatabase() {
   `);
 
   // ── Projects ───────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -147,7 +145,7 @@ async function initializeDatabase() {
   `);
 
   // ── Properties ─────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS properties (
       id TEXT PRIMARY KEY,
       project_id TEXT,
@@ -177,7 +175,7 @@ async function initializeDatabase() {
   `);
 
   // ── Attachments ────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS attachments (
       id TEXT PRIMARY KEY,
       entity_type TEXT NOT NULL,
@@ -193,7 +191,7 @@ async function initializeDatabase() {
   `);
 
   // ── Deals ──────────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS deals (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -215,7 +213,7 @@ async function initializeDatabase() {
   `);
 
   // ── Tasks ──────────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -236,30 +234,30 @@ async function initializeDatabase() {
   // ── Tasks migrations ──────────────────────────────────────────────────────
   const taskCols = all("PRAGMA table_info(tasks)").map(c => c.name);
   if (!taskCols.includes('postponed_reason')) {
-    db.run("ALTER TABLE tasks ADD COLUMN postponed_reason TEXT DEFAULT ''");
+    db.exec("ALTER TABLE tasks ADD COLUMN postponed_reason TEXT DEFAULT ''");
   }
   if (!taskCols.includes('completion_notes')) {
-    db.run("ALTER TABLE tasks ADD COLUMN completion_notes TEXT DEFAULT ''");
+    db.exec("ALTER TABLE tasks ADD COLUMN completion_notes TEXT DEFAULT ''");
   }
   if (!taskCols.includes('postpone_count')) {
-    db.run("ALTER TABLE tasks ADD COLUMN postpone_count INTEGER DEFAULT 0");
+    db.exec("ALTER TABLE tasks ADD COLUMN postpone_count INTEGER DEFAULT 0");
   }
   if (!taskCols.includes('assigned_to_id')) {
-    db.run("ALTER TABLE tasks ADD COLUMN assigned_to_id TEXT DEFAULT NULL");
+    db.exec("ALTER TABLE tasks ADD COLUMN assigned_to_id TEXT DEFAULT NULL");
   }
   // Always try to populate NULL assigned_to_id from user names (runs every startup)
-  db.run(`UPDATE tasks SET assigned_to_id = (
+  db.exec(`UPDATE tasks SET assigned_to_id = (
     SELECT u.id FROM users u WHERE u.name = tasks.assigned_to
   ) WHERE assigned_to_id IS NULL AND assigned_to IS NOT NULL`);
   if (!taskCols.includes('property_id')) {
-    db.run("ALTER TABLE tasks ADD COLUMN property_id TEXT DEFAULT NULL");
+    db.exec("ALTER TABLE tasks ADD COLUMN property_id TEXT DEFAULT NULL");
   }
   if (!taskCols.includes('company_id')) {
-    db.run("ALTER TABLE tasks ADD COLUMN company_id TEXT DEFAULT NULL");
+    db.exec("ALTER TABLE tasks ADD COLUMN company_id TEXT DEFAULT NULL");
   }
 
   // ── Task Participants (multi-agent shared tasks) ─────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS task_participants (
       id TEXT PRIMARY KEY,
       task_id TEXT NOT NULL,
@@ -272,14 +270,14 @@ async function initializeDatabase() {
   // Seed existing owners into task_participants
   const tpCount = get("SELECT COUNT(*) as cnt FROM task_participants");
   if (tpCount && tpCount.cnt === 0) {
-    db.run(`INSERT OR IGNORE INTO task_participants (id, task_id, user_id, role)
+    db.exec(`INSERT OR IGNORE INTO task_participants (id, task_id, user_id, role)
       SELECT hex(randomblob(16)), t.id, t.assigned_to_id, 'owner'
       FROM tasks t WHERE t.assigned_to_id IS NOT NULL`);
   }
   saveDb();
 
   // ── Timeline ───────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS timeline (
       id TEXT PRIMARY KEY,
       deal_id TEXT,
@@ -293,7 +291,7 @@ async function initializeDatabase() {
   `);
 
   // ── Match Notifications ────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS match_notifications (
       id TEXT PRIMARY KEY,
       contact_id TEXT NOT NULL,
@@ -309,11 +307,11 @@ async function initializeDatabase() {
   // Add status column to match_notifications if missing
   const mnCols = all("PRAGMA table_info(match_notifications)").map(c => c.name);
   if (!mnCols.includes('status')) {
-    db.run("ALTER TABLE match_notifications ADD COLUMN status TEXT DEFAULT 'new'");
+    db.exec("ALTER TABLE match_notifications ADD COLUMN status TEXT DEFAULT 'new'");
   }
 
   // ── Meetings ───────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS meetings (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -330,7 +328,7 @@ async function initializeDatabase() {
       created_at TEXT DEFAULT (datetime('now'))
     );
   `);
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS meeting_attendees (
       id TEXT PRIMARY KEY,
       meeting_id TEXT NOT NULL,
@@ -343,7 +341,7 @@ async function initializeDatabase() {
   `);
 
   // ── Proposals ──────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS proposals (
       id TEXT PRIMARY KEY,
       template_type TEXT NOT NULL,
@@ -360,7 +358,7 @@ async function initializeDatabase() {
   `);
 
   // ── Property Files ──────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS property_files (
       id TEXT PRIMARY KEY,
       property_id TEXT NOT NULL,
@@ -375,7 +373,7 @@ async function initializeDatabase() {
   `);
 
   // ── Activities ──────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS activities (
       id TEXT PRIMARY KEY,
       entity_type TEXT NOT NULL,
@@ -393,7 +391,7 @@ async function initializeDatabase() {
   `);
 
   // ── Agent Goals ─────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS agent_goals (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -409,7 +407,7 @@ async function initializeDatabase() {
   `);
 
   // ── Webhook Logs ────────────────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS webhook_logs (
       id TEXT PRIMARY KEY,
       source TEXT NOT NULL,
@@ -421,7 +419,7 @@ async function initializeDatabase() {
   `);
 
   // ── Lead Assignment Rules ───────────────────────────────────────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS lead_assignment_rules (
       id TEXT PRIMARY KEY,
       source TEXT NOT NULL,
@@ -433,7 +431,7 @@ async function initializeDatabase() {
 
   // ── WhatsApp Logs ──────────────────────────────────────────────────────────
   // Every inbound/outbound WhatsApp message, used for dedup + audit + undo
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS whatsapp_logs (
       id TEXT PRIMARY KEY,
       direction TEXT NOT NULL,
@@ -452,7 +450,7 @@ async function initializeDatabase() {
 
   // ── WhatsApp Pending Actions ───────────────────────────────────────────────
   // Proposed actions waiting for user approval (when LLM confidence < 90%)
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS whatsapp_pending_actions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -467,7 +465,7 @@ async function initializeDatabase() {
 
   // ── WhatsApp Undo Log ──────────────────────────────────────────────────────
   // Inverse operations stored after auto-save, allow "בטל" within 1 hour
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS whatsapp_undo_log (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -481,7 +479,7 @@ async function initializeDatabase() {
 
   // ── Business Categories (tenant-mix taxonomy) ──────────────────────────────
   // Hierarchical: parent_id NULL = main category, otherwise a sub-category.
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS business_categories (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -493,7 +491,7 @@ async function initializeDatabase() {
   `);
 
   // ── App settings (key/value, e.g. company_logo data URI) ───────────────────
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY,
       value TEXT DEFAULT '',
@@ -503,7 +501,7 @@ async function initializeDatabase() {
 
   // ── Unit candidates ("תמהיל מוצע") — the curated shortlist of retail chains
   //    proposed for a unit. A candidate can be promoted into a full deal.
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS unit_candidates (
       id TEXT PRIMARY KEY,
       property_id TEXT NOT NULL,
@@ -520,7 +518,7 @@ async function initializeDatabase() {
 
   // ── Floor plans — one uploaded plan image per project floor, used by the
   //    developer report's status map. Units carry a map_polygon into it.
-  db.run(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS floor_plans (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
@@ -670,7 +668,7 @@ function runMigrations() {
   ];
 
   migrations.forEach(sql => {
-    try { db.run(sql); } catch (e) { /* column already exists */ }
+    try { db.exec(sql); } catch (e) { /* column already exists */ }
   });
 
   // ── Data migrations: convert residential types to commercial ────────────
@@ -714,7 +712,7 @@ function runMigrations() {
     `UPDATE properties SET floor_label = CAST(floor AS TEXT) WHERE (floor_label IS NULL OR floor_label = '') AND floor != 0`,
   ];
   dataMigrations.forEach(sql => {
-    try { db.run(sql); } catch (e) { /* ignore errors */ }
+    try { db.exec(sql); } catch (e) { /* ignore errors */ }
   });
 
   saveDb();
@@ -759,9 +757,9 @@ function ensureCategories() {
   try {
     CATEGORY_TREE.forEach((main, i) => {
       const mainId = `bc-${i}`;
-      db.run(`INSERT OR IGNORE INTO business_categories (id,name,parent_id,sort_order) VALUES (?,?,NULL,?)`, [mainId, main.name, i]);
+      db.exec(`INSERT OR IGNORE INTO business_categories (id,name,parent_id,sort_order) VALUES (?,?,NULL,?)`, [mainId, main.name, i]);
       main.subs.forEach((sub, j) => {
-        db.run(`INSERT OR IGNORE INTO business_categories (id,name,parent_id,sort_order) VALUES (?,?,?,?)`, [`${mainId}-${j}`, sub, mainId, j]);
+        db.exec(`INSERT OR IGNORE INTO business_categories (id,name,parent_id,sort_order) VALUES (?,?,?,?)`, [`${mainId}-${j}`, sub, mainId, j]);
       });
     });
     saveDb();
