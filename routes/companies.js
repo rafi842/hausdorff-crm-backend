@@ -6,6 +6,15 @@ const { authMiddleware, adminOnly } = require('../middleware/auth');
 const { safeError } = require('../utils/errors');
 const { fetchCorrespondence } = require('../services/gmail');
 
+// A company is either a retail chain we lease TO, or a developer/landlord we
+// lease FOR. Both live in this table and behave differently in the funnel, so
+// the field is constrained rather than free text — anything unrecognised (the
+// legacy 'קבלן', an empty body) settles on רשת, which is what this page creates.
+const COMPANY_TYPES = ['רשת', 'יזם'];
+function normalizeType(type) {
+  return COMPANY_TYPES.includes(type) ? type : 'רשת';
+}
+
 router.get('/', authMiddleware, (req, res) => {
   try {
     const { search } = req.query;
@@ -41,7 +50,7 @@ router.post('/', authMiddleware, (req, res) => {
       target_area_min, target_area_max, rent_budget_per_sqm, chain_status, expansion_notes } = req.body;
     const now = new Date().toISOString();
     run(`INSERT INTO companies (id,name,type,phone,email,address,website,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [id, name, type||'קבלן', phone||'', email||'', address||'', website||'', notes||'', now, now]);
+      [id, name, normalizeType(type), phone||'', email||'', address||'', website||'', notes||'', now, now]);
     run(`UPDATE companies SET business_category=?,business_subcategory=?,branch_count=?,target_area_min=?,target_area_max=?,rent_budget_per_sqm=?,chain_status=?,expansion_notes=? WHERE id=?`,
       [business_category||'', business_subcategory||'', branch_count||0, target_area_min||0, target_area_max||0, rent_budget_per_sqm||0, chain_status||'פוטנציאלי', expansion_notes||'', id]);
     res.status(201).json(get('SELECT * FROM companies WHERE id = ?', [id]));
@@ -57,7 +66,7 @@ router.put('/:id', authMiddleware, (req, res) => {
       target_area_min, target_area_max, rent_budget_per_sqm, chain_status, expansion_notes } = req.body;
     const now = new Date().toISOString();
     run(`UPDATE companies SET name=?,type=?,phone=?,email=?,address=?,website=?,notes=?,updated_at=? WHERE id=?`,
-      [name, type||'קבלן', phone||'', email||'', address||'', website||'', notes||'', now, req.params.id]);
+      [name, normalizeType(type), phone||'', email||'', address||'', website||'', notes||'', now, req.params.id]);
     run(`UPDATE companies SET business_category=?,business_subcategory=?,branch_count=?,target_area_min=?,target_area_max=?,rent_budget_per_sqm=?,chain_status=?,expansion_notes=? WHERE id=?`,
       [business_category||'', business_subcategory||'', branch_count||0, target_area_min||0, target_area_max||0, rent_budget_per_sqm||0, chain_status||'פוטנציאלי', expansion_notes||'', req.params.id]);
     res.json(get('SELECT * FROM companies WHERE id = ?', [req.params.id]));

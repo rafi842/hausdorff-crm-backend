@@ -734,6 +734,17 @@ function runMigrations() {
     `UPDATE properties SET area_net = area WHERE (area_net IS NULL OR area_net = 0) AND area > 0`,
     // Backfill floor_label from the numeric floor
     `UPDATE properties SET floor_label = CAST(floor AS TEXT) WHERE (floor_label IS NULL OR floor_label = '') AND floor != 0`,
+    // companies.type becomes a real two-value field: 'רשת' (retail tenant) vs
+    // 'יזם' (developer/landlord). It previously defaulted to 'קבלן' from the
+    // pre-commercial era and was editable nowhere, so every row carried it.
+    // Owning a project is the strong signal for a developer; classify those
+    // first, then sweep everything still holding a legacy value to 'רשת'.
+    // Both are scoped to non-valid values, so a later manual choice is never
+    // overwritten on subsequent boots.
+    `UPDATE companies SET type = 'יזם'
+       WHERE type NOT IN ('רשת', 'יזם')
+         AND id IN (SELECT company_id FROM projects WHERE company_id IS NOT NULL AND company_id <> '')`,
+    `UPDATE companies SET type = 'רשת' WHERE type NOT IN ('רשת', 'יזם')`,
   ];
   dataMigrations.forEach(sql => {
     try { db.exec(sql); } catch (e) { /* ignore errors */ }
