@@ -65,7 +65,7 @@ const ENRICHED_SELECT = `
 
 router.get('/', authMiddleware, (req, res) => {
   try {
-    const { assigned_to, completed, priority, deal_id, contact_id, property_id, company_id,
+    const { assigned_to, completed, priority, deal_id, contact_id, property_id, company_id, project_id,
             overdue, due_today, week_start, week_end, user_id, show_all } = req.query;
     let query = ENRICHED_SELECT + ' WHERE 1=1';
     const params = [];
@@ -86,6 +86,7 @@ router.get('/', authMiddleware, (req, res) => {
     if (contact_id) { query += ' AND t.contact_id = ?'; params.push(contact_id); }
     if (property_id) { query += ' AND t.property_id = ?'; params.push(property_id); }
     if (company_id) { query += ' AND t.company_id = ?'; params.push(company_id); }
+    if (project_id) { query += ' AND t.project_id = ?'; params.push(project_id); }
     if (overdue === 'true') {
       const today = new Date().toISOString().split('T')[0];
       query += ` AND t.due_date < '${today}' AND t.completed = 0`;
@@ -120,7 +121,7 @@ router.get('/:id', authMiddleware, (req, res) => {
 router.post('/', authMiddleware, (req, res) => {
   try {
     const id = uuidv4();
-    const { title, description, deal_id, contact_id, property_id, company_id,
+    const { title, description, deal_id, contact_id, property_id, company_id, project_id,
             assigned_to, assigned_to_id, due_date, task_time, priority, type,
             completion_notes, participants } = req.body;
     const now = new Date().toISOString();
@@ -133,8 +134,8 @@ router.post('/', authMiddleware, (req, res) => {
       if (ownerUser) ownerName = ownerUser.name;
     }
 
-    run(`INSERT INTO tasks (id,title,description,deal_id,contact_id,property_id,company_id,assigned_to,assigned_to_id,due_date,task_time,priority,type,completion_notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [id, title, description||'', deal_id||null, contact_id||null, property_id||null, company_id||null,
+    run(`INSERT INTO tasks (id,title,description,deal_id,contact_id,property_id,company_id,project_id,assigned_to,assigned_to_id,due_date,task_time,priority,type,completion_notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [id, title, description||'', deal_id||null, contact_id||null, property_id||null, company_id||null, project_id||'',
        ownerName, ownerId, due_date||null, task_time||'', priority||'בינוני', type||'משימה',
        completion_notes||'', now, now]);
 
@@ -151,7 +152,7 @@ router.post('/', authMiddleware, (req, res) => {
 
 router.put('/:id', authMiddleware, (req, res) => {
   try {
-    const { title, description, deal_id, contact_id, property_id, company_id,
+    const { title, description, deal_id, contact_id, property_id, company_id, project_id,
             assigned_to, assigned_to_id, due_date, task_time, completed, priority, type,
             postponed_reason, completion_notes, postpone_count, participants } = req.body;
     const now = new Date().toISOString();
@@ -164,8 +165,8 @@ router.put('/:id', authMiddleware, (req, res) => {
       if (ownerUser) ownerName = ownerUser.name;
     }
 
-    run(`UPDATE tasks SET title=?,description=?,deal_id=?,contact_id=?,property_id=?,company_id=?,assigned_to=?,assigned_to_id=?,due_date=?,task_time=?,completed=?,priority=?,type=?,postponed_reason=?,completion_notes=?,postpone_count=?,updated_at=? WHERE id=?`,
-      [title, description||'', deal_id||null, contact_id||null, property_id||null, company_id||null,
+    run(`UPDATE tasks SET title=?,description=?,deal_id=?,contact_id=?,property_id=?,company_id=?,project_id=?,assigned_to=?,assigned_to_id=?,due_date=?,task_time=?,completed=?,priority=?,type=?,postponed_reason=?,completion_notes=?,postpone_count=?,updated_at=? WHERE id=?`,
+      [title, description||'', deal_id||null, contact_id||null, property_id||null, company_id||null, project_id||'',
        ownerName, ownerId, due_date||null, task_time||'', completed?1:0, priority||'בינוני', type||'משימה',
        postponed_reason||'', completion_notes||'', postpone_count||0, now, req.params.id]);
 

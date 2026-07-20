@@ -8,7 +8,7 @@ const { safeError } = require('../utils/errors');
 // GET all meetings (with filters)
 router.get('/', authMiddleware, (req, res) => {
   try {
-    const { contact_id, deal_id, start, end, status } = req.query;
+    const { contact_id, deal_id, start, end, status, project_id } = req.query;
     let query = `
       SELECT m.*,
         c.first_name || ' ' || c.last_name as contact_name,
@@ -21,6 +21,7 @@ router.get('/', authMiddleware, (req, res) => {
 
     if (contact_id) { query += ' AND m.contact_id = ?'; params.push(contact_id); }
     if (deal_id) { query += ' AND m.deal_id = ?'; params.push(deal_id); }
+    if (project_id) { query += ' AND m.project_id = ?'; params.push(project_id); }
     if (start) { query += ' AND m.start_datetime >= ?'; params.push(start); }
     if (end) { query += ' AND m.end_datetime <= ?'; params.push(end); }
     if (status) { query += ' AND m.status = ?'; params.push(status); }
@@ -64,7 +65,7 @@ router.post('/', authMiddleware, (req, res) => {
     const id = uuidv4();
     const {
       title, description, start_datetime, end_datetime,
-      location, contact_id, deal_id,
+      location, contact_id, deal_id, project_id,
       google_event_id, google_event_link,
       attendees
     } = req.body;
@@ -73,10 +74,10 @@ router.post('/', authMiddleware, (req, res) => {
       return res.status(400).json({ error: 'title, start_datetime, and end_datetime are required' });
     }
 
-    run(`INSERT INTO meetings (id, title, description, start_datetime, end_datetime, location, contact_id, deal_id, google_event_id, google_event_link, status, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?)`,
+    run(`INSERT INTO meetings (id, title, description, start_datetime, end_datetime, location, contact_id, deal_id, project_id, google_event_id, google_event_link, status, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?)`,
       [id, title, description || '', start_datetime, end_datetime, location || '',
-       contact_id || null, deal_id || null,
+       contact_id || null, deal_id || null, project_id || '',
        google_event_id || '', google_event_link || '',
        req.user.id]);
 

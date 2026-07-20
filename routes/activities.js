@@ -10,17 +10,20 @@ const { safeError } = require('../utils/errors');
 // well, so filling in only the date produced nothing at all — silently, which is
 // the worst way to lose a follow-up. When there is no text, name the task after
 // the activity it came from.
-function followUpTask({ next_action, next_action_date, subject, entity_type, entity_id, user }) {
+function followUpTask({ next_action, next_action_date, subject, entity_type, entity_id, user, project_id }) {
   if (!next_action_date) return null;
   const taskId = uuidv4();
   const title = (next_action && next_action.trim()) || `מעקב: ${subject}`;
   run(`
-    INSERT INTO tasks (id, title, description, deal_id, contact_id, assigned_to, assigned_to_id, due_date, completed, priority, type, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'חשוב (לא דחוף)', 'follow_up', datetime('now'), datetime('now'))
+    INSERT INTO tasks (id, title, description, deal_id, contact_id, project_id, assigned_to, assigned_to_id, due_date, completed, priority, type, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'חשוב (לא דחוף)', 'follow_up', datetime('now'), datetime('now'))
   `, [
     taskId, title, `המשך טיפול מפעילות: ${subject}`,
     entity_type === 'deal' ? entity_id : null,
     entity_type === 'contact' ? entity_id : null,
+    // Carry the tag through: a follow-up to a call about a centre is work on
+    // that centre, and re-tagging it by hand is the kind of step people skip.
+    project_id || '',
     user?.name || 'מנהל', user?.id || '', next_action_date,
   ]);
   return taskId;
@@ -107,7 +110,7 @@ router.post('/', authMiddleware, (req, res) => {
       req.user.id, project_id || ''
     ]);
 
-    followUpTask({ next_action, next_action_date, subject, entity_type, entity_id, user: req.user });
+    followUpTask({ next_action, next_action_date, subject, entity_type, entity_id, user: req.user, project_id });
 
     // Insert into timeline for backwards compatibility
     const contactId = entity_type === 'contact' ? entity_id : null;
@@ -160,6 +163,7 @@ router.put('/:id', authMiddleware, (req, res) => {
         entity_type: activity.entity_type,
         entity_id: activity.entity_id,
         user: req.user,
+        project_id: project_id !== undefined ? project_id : activity.project_id,
       });
     }
 

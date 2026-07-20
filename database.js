@@ -695,6 +695,11 @@ function runMigrations() {
     // a prospecting call belongs to no unit, and one chain can be a candidate for
     // several centres. Only the agent knows, so let them say.
     `ALTER TABLE activities ADD COLUMN project_id TEXT DEFAULT ''`,
+    // Same tag on tasks and meetings, so the work for a centre can be filtered
+    // and reviewed together. Note the developer report reads activities only —
+    // tagging these organises them, it does not put them in front of the client.
+    `ALTER TABLE tasks ADD COLUMN project_id TEXT DEFAULT ''`,
+    `ALTER TABLE meetings ADD COLUMN project_id TEXT DEFAULT ''`,
   ];
 
   migrations.forEach(sql => {
