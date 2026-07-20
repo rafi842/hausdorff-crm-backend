@@ -5,6 +5,27 @@ const { run, get, all, getDb } = require('../database');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
 const { safeError } = require('../utils/errors');
 
+// Setting a follow-up date is the agent asking to be reminded, so the date alone
+// is enough to raise the task. This used to require the "next action" text as
+// well, so filling in only the date produced nothing at all — silently, which is
+// the worst way to lose a follow-up. When there is no text, name the task after
+// the activity it came from.
+function followUpTask({ next_action, next_action_date, subject, entity_type, entity_id, user }) {
+  if (!next_action_date) return null;
+  const taskId = uuidv4();
+  const title = (next_action && next_action.trim()) || `מעקב: ${subject}`;
+  run(`
+    INSERT INTO tasks (id, title, description, deal_id, contact_id, assigned_to, assigned_to_id, due_date, completed, priority, type, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'חשוב (לא דחוף)', 'follow_up', datetime('now'), datetime('now'))
+  `, [
+    taskId, title, `המשך טיפול מפעילות: ${subject}`,
+    entity_type === 'deal' ? entity_id : null,
+    entity_type === 'contact' ? entity_id : null,
+    user?.name || 'מנהל', user?.id || '', next_action_date,
+  ]);
+  return taskId;
+}
+
 // GET all activities
 router.get('/', authMiddleware, (req, res) => {
   try {
@@ -86,16 +107,7 @@ router.post('/', authMiddleware, (req, res) => {
       req.user.id, project_id || ''
     ]);
 
-    // Auto-create task if next_action_date is provided
-    if (next_action_date && next_action) {
-      const taskId = uuidv4();
-      const contactId2 = entity_type === 'contact' ? entity_id : null;
-      const dealId2 = entity_type === 'deal' ? entity_id : null;
-      run(`
-        INSERT INTO tasks (id, title, description, deal_id, contact_id, assigned_to, assigned_to_id, due_date, completed, priority, type, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'חשוב (לא דחוף)', 'follow_up', datetime('now'), datetime('now'))
-      `, [taskId, next_action, `המשך טיפול מפעילות: ${subject}`, dealId2, contactId2, req.user.name, req.user.id, next_action_date]);
-    }
+    followUpTask({ next_action, next_action_date, subject, entity_type, entity_id, user: req.user });
 
     // Insert into timeline for backwards compatibility
     const contactId = entity_type === 'contact' ? entity_id : null;
@@ -135,6 +147,21 @@ router.put('/:id', authMiddleware, (req, res) => {
        duration_minutes !== undefined ? duration_minutes : activity.duration_minutes,
        project_id !== undefined ? project_id : activity.project_id,
        req.params.id]);
+
+    // Editing in a follow-up date after the fact is the same request for a
+    // reminder, and previously raised nothing. Only fire when the date is newly
+    // set or changed, so re-saving an activity doesn't pile up duplicate tasks.
+    const newDate = next_action_date !== undefined ? next_action_date : activity.next_action_date;
+    if (newDate && newDate !== activity.next_action_date) {
+      followUpTask({
+        next_action: next_action !== undefined ? next_action : activity.next_action,
+        next_action_date: newDate,
+        subject: subject || activity.subject,
+        entity_type: activity.entity_type,
+        entity_id: activity.entity_id,
+        user: req.user,
+      });
+    }
 
     const updated = get(`
       SELECT a.*, u.name as created_by_name
