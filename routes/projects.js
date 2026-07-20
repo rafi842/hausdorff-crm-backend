@@ -142,6 +142,18 @@ router.get('/:id/marketing-report', authMiddleware, (req, res) => {
         unit_number = dealById[a.entity_id].unit_number || '';
       } else if (a.entity_type === 'property' && unitById[a.entity_id]) {
         unit_number = unitById[a.entity_id].unit_number || '';
+      } else if (a.entity_type === 'contact') {
+        // A project-tagged call sits on the contact, with no deal or unit to read
+        // the names off — so look them up. Without this the report's busiest
+        // column is a row of dashes for exactly the early-stage work it exists
+        // to show.
+        const c = get(`SELECT c.first_name || ' ' || c.last_name AS contact_name, comp.name AS chain_name
+                       FROM contacts c LEFT JOIN companies comp ON c.company_id = comp.id
+                       WHERE c.id = ?`, [a.entity_id]);
+        if (c) { contact_name = c.contact_name || ''; chain_name = c.chain_name || ''; }
+      } else if (a.entity_type === 'company') {
+        const comp = get('SELECT name FROM companies WHERE id = ?', [a.entity_id]);
+        if (comp) chain_name = comp.name || '';
       }
       return { ...a, contact_name, chain_name, unit_number };
     });
