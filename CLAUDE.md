@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Recent work:** [`SESSION_2026-07-20.md`](SESSION_2026-07-20.md) logs the 18–20 July
+> session — Gmail send + inbound email filing, the sql.js→better-sqlite3 engine swap,
+> the chain (company) client card rollup, the security pass, and project tagging into
+> the developer report. It records *why* several decisions were made and what is still
+> open. Read it before assuming how any of those work.
+
 ## Commands
 
 Run from the relevant subdirectory; there is no root `package.json`.
