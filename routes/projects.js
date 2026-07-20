@@ -117,15 +117,19 @@ router.get('/:id/marketing-report', authMiddleware, (req, res) => {
       `, unitIds);
     }
 
+    // An activity counts toward this centre if it is attached to one of its units
+    // or their deals, OR if the agent tagged it to the project directly. The tag is
+    // what captures early-stage work — prospecting a chain before any unit is on
+    // the table attaches to a contact, which no unit or deal would ever match.
     const entityIds = [...deals.map(d => d.id), ...unitIds];
-    let activities = [];
-    if (entityIds.length) {
-      const ph = entityIds.map(() => '?').join(',');
-      activities = all(
-        `SELECT * FROM activities WHERE entity_id IN (${ph}) AND created_at >= ? AND created_at <= ? ORDER BY created_at DESC`,
-        [...entityIds, fromDate, toDate]
-      );
-    }
+    const ph = entityIds.map(() => '?').join(',');
+    const activities = all(
+      `SELECT * FROM activities
+        WHERE (${entityIds.length ? `entity_id IN (${ph}) OR ` : ''}project_id = ?)
+          AND created_at >= ? AND created_at <= ?
+        ORDER BY created_at DESC`,
+      [...entityIds, req.params.id, fromDate, toDate]
+    );
     // Enrich activities with chain/unit context
     const dealById = {}; deals.forEach(d => { dealById[d.id] = d; });
     const unitById = {}; units.forEach(u => { unitById[u.id] = u; });

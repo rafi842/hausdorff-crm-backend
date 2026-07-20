@@ -689,6 +689,12 @@ function runMigrations() {
     // gmail.send was requested hold a calendar-only token, and the only way to
     // know is to record what came back with it.
     `ALTER TABLE users ADD COLUMN google_scopes TEXT DEFAULT ''`,
+    // Which centre an interaction was about. The developer report gathers
+    // activities via deals-on-units, so early-stage work — calling a chain before
+    // any unit is on the table — reached no report at all. It cannot be derived:
+    // a prospecting call belongs to no unit, and one chain can be a candidate for
+    // several centres. Only the agent knows, so let them say.
+    `ALTER TABLE activities ADD COLUMN project_id TEXT DEFAULT ''`,
   ];
 
   migrations.forEach(sql => {

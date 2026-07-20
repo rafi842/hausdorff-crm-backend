@@ -68,7 +68,8 @@ router.post('/', authMiddleware, (req, res) => {
     const id = uuidv4();
     const {
       entity_type, entity_id, activity_type, subject,
-      summary, outcome, next_action, next_action_date, duration_minutes
+      summary, outcome, next_action, next_action_date, duration_minutes,
+      project_id
     } = req.body;
 
     if (!entity_type || !entity_id || !activity_type || !subject) {
@@ -76,13 +77,13 @@ router.post('/', authMiddleware, (req, res) => {
     }
 
     run(`
-      INSERT INTO activities (id, entity_type, entity_id, activity_type, subject, summary, outcome, next_action, next_action_date, duration_minutes, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO activities (id, entity_type, entity_id, activity_type, subject, summary, outcome, next_action, next_action_date, duration_minutes, created_by, project_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id, entity_type, entity_id, activity_type, subject,
       summary || '', outcome || '', next_action || '',
       next_action_date || null, duration_minutes || 0,
-      req.user.id
+      req.user.id, project_id || ''
     ]);
 
     // Auto-create task if next_action_date is provided
@@ -119,11 +120,11 @@ router.put('/:id', authMiddleware, (req, res) => {
     if (!activity) return res.status(404).json({ error: 'Activity not found' });
 
     const { activity_type, subject, summary, outcome,
-            next_action, next_action_date, duration_minutes } = req.body;
+            next_action, next_action_date, duration_minutes, project_id } = req.body;
 
     run(`UPDATE activities SET
       activity_type=?, subject=?, summary=?, outcome=?,
-      next_action=?, next_action_date=?, duration_minutes=?
+      next_action=?, next_action_date=?, duration_minutes=?, project_id=?
       WHERE id=?`,
       [activity_type || activity.activity_type,
        subject || activity.subject,
@@ -132,6 +133,7 @@ router.put('/:id', authMiddleware, (req, res) => {
        next_action !== undefined ? next_action : activity.next_action,
        next_action_date !== undefined ? next_action_date : activity.next_action_date,
        duration_minutes !== undefined ? duration_minutes : activity.duration_minutes,
+       project_id !== undefined ? project_id : activity.project_id,
        req.params.id]);
 
     const updated = get(`
