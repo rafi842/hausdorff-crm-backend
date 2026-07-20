@@ -22,11 +22,12 @@ router.get('/', authMiddleware, (req, res) => {
     // full history regardless of which rep it happened with.
     if (entity_type === 'company' && entity_id) {
       query += ` AND (
-        (a.entity_type = 'contact' AND a.entity_id IN (SELECT id FROM contacts WHERE company_id = ?))
+        (a.entity_type = 'company' AND a.entity_id = ?)
+        OR (a.entity_type = 'contact' AND a.entity_id IN (SELECT id FROM contacts WHERE company_id = ?))
         OR (a.entity_type = 'deal' AND a.entity_id IN (
               SELECT id FROM deals WHERE contact_id IN (SELECT id FROM contacts WHERE company_id = ?)))
       )`;
-      params.push(entity_id, entity_id);
+      params.push(entity_id, entity_id, entity_id);
     } else {
       if (entity_type) { query += ` AND a.entity_type = ?`; params.push(entity_type); }
       if (entity_id) { query += ` AND a.entity_id = ?`; params.push(entity_id); }
