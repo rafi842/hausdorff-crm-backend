@@ -123,7 +123,7 @@ router.post('/', authMiddleware, (req, res) => {
     const id = uuidv4();
     const { title, description, deal_id, contact_id, property_id, company_id, project_id,
             assigned_to, assigned_to_id, due_date, task_time, priority, type,
-            completion_notes, participants } = req.body;
+            completion_notes, participants, exclude_from_report } = req.body;
     const now = new Date().toISOString();
     const ownerId = assigned_to_id || req.user.id;
 
@@ -134,8 +134,8 @@ router.post('/', authMiddleware, (req, res) => {
       if (ownerUser) ownerName = ownerUser.name;
     }
 
-    run(`INSERT INTO tasks (id,title,description,deal_id,contact_id,property_id,company_id,project_id,assigned_to,assigned_to_id,due_date,task_time,priority,type,completion_notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [id, title, description||'', deal_id||null, contact_id||null, property_id||null, company_id||null, project_id||'',
+    run(`INSERT INTO tasks (id,title,description,deal_id,contact_id,property_id,company_id,project_id,exclude_from_report,assigned_to,assigned_to_id,due_date,task_time,priority,type,completion_notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [id, title, description||'', deal_id||null, contact_id||null, property_id||null, company_id||null, project_id||'', exclude_from_report?1:0,
        ownerName, ownerId, due_date||null, task_time||'', priority||'בינוני', type||'משימה',
        completion_notes||'', now, now]);
 
@@ -154,7 +154,7 @@ router.put('/:id', authMiddleware, (req, res) => {
   try {
     const { title, description, deal_id, contact_id, property_id, company_id, project_id,
             assigned_to, assigned_to_id, due_date, task_time, completed, priority, type,
-            postponed_reason, completion_notes, postpone_count, participants } = req.body;
+            postponed_reason, completion_notes, postpone_count, participants, exclude_from_report } = req.body;
     const now = new Date().toISOString();
     const ownerId = assigned_to_id || null;
 
@@ -165,8 +165,8 @@ router.put('/:id', authMiddleware, (req, res) => {
       if (ownerUser) ownerName = ownerUser.name;
     }
 
-    run(`UPDATE tasks SET title=?,description=?,deal_id=?,contact_id=?,property_id=?,company_id=?,project_id=?,assigned_to=?,assigned_to_id=?,due_date=?,task_time=?,completed=?,priority=?,type=?,postponed_reason=?,completion_notes=?,postpone_count=?,updated_at=? WHERE id=?`,
-      [title, description||'', deal_id||null, contact_id||null, property_id||null, company_id||null, project_id||'',
+    run(`UPDATE tasks SET title=?,description=?,deal_id=?,contact_id=?,property_id=?,company_id=?,project_id=?,exclude_from_report=?,assigned_to=?,assigned_to_id=?,due_date=?,task_time=?,completed=?,priority=?,type=?,postponed_reason=?,completion_notes=?,postpone_count=?,updated_at=? WHERE id=?`,
+      [title, description||'', deal_id||null, contact_id||null, property_id||null, company_id||null, project_id||'', exclude_from_report?1:0,
        ownerName, ownerId, due_date||null, task_time||'', completed?1:0, priority||'בינוני', type||'משימה',
        postponed_reason||'', completion_notes||'', postpone_count||0, now, req.params.id]);
 

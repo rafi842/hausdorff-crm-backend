@@ -158,9 +158,33 @@ router.get('/:id/marketing-report', authMiddleware, (req, res) => {
       return { ...a, contact_name, chain_name, unit_number };
     });
 
+    // Tasks tagged to this centre. Included by default because a task is evidence
+    // of movement, which is what the developer is reading the report for; the
+    // agent opts individual ones out. Windowed on created_at like the activities,
+    // so "what happened in this period" means the same thing throughout.
+    const reportTasks = all(`
+      SELECT t.id, t.title, t.due_date, t.completed, t.type, t.assigned_to, t.created_at,
+             c.first_name || ' ' || c.last_name AS contact_name,
+             COALESCE(comp.name, comp_via_contact.name) AS chain_name
+      FROM tasks t
+      LEFT JOIN contacts c ON t.contact_id = c.id
+      LEFT JOIN companies comp ON t.company_id = comp.id
+      LEFT JOIN companies comp_via_contact ON c.company_id = comp_via_contact.id
+      WHERE t.project_id = ?
+        AND COALESCE(t.exclude_from_report, 0) = 0
+        -- Compare on the date, not the raw string: tasks store created_at as ISO
+        -- ("...T11:00:00Z") while the window's end is "... 23:59:59", and 'T'
+        -- sorts after ' ', so a plain string compare drops everything created on
+        -- the final day. date() normalises both forms.
+        AND date(t.created_at) >= date(?) AND date(t.created_at) <= date(?)
+      ORDER BY t.completed ASC, t.due_date ASC
+    `, [req.params.id, fromDate, toDate]);
+
     const summary = {
       totalUnits: units.length, leased: 0, nego: 0, free: 0,
       activityCount: activities.length,
+      taskCount: reportTasks.length,
+      openTaskCount: reportTasks.filter(t => !t.completed).length,
       openDeals: deals.filter(d => d.stage >= 1 && d.stage <= 5).length,
       signed: deals.filter(d => d.stage === 6).length,
     };
@@ -190,7 +214,7 @@ router.get('/:id/marketing-report', authMiddleware, (req, res) => {
 
     const floorPlans = all('SELECT * FROM floor_plans WHERE project_id = ? ORDER BY created_at ASC', [req.params.id]);
 
-    res.json({ project, from: from || '', to: to || '', units, deals, activities, summary, proforma, floorPlans });
+    res.json({ project, from: from || '', to: to || '', units, deals, activities, tasks: reportTasks, summary, proforma, floorPlans });
   } catch (err) {
     res.status(500).json({ error: safeError(err) });
   }

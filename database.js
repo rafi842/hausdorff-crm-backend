@@ -700,6 +700,10 @@ function runMigrations() {
     // tagging these organises them, it does not put them in front of the client.
     `ALTER TABLE tasks ADD COLUMN project_id TEXT DEFAULT ''`,
     `ALTER TABLE meetings ADD COLUMN project_id TEXT DEFAULT ''`,
+    // A task tagged to a centre is evidence of movement, which is what the
+    // developer wants from the report — so it is included by default and the
+    // agent opts a task out, rather than having to remember to opt each one in.
+    `ALTER TABLE tasks ADD COLUMN exclude_from_report INTEGER DEFAULT 0`,
   ];
 
   migrations.forEach(sql => {
