@@ -123,7 +123,8 @@ router.get('/:id/marketing-report', authMiddleware, (req, res) => {
     // the table attaches to a contact, which no unit or deal would ever match.
     const entityIds = [...deals.map(d => d.id), ...unitIds];
     const ph = entityIds.map(() => '?').join(',');
-    const activities = all(
+    // `let`, not `const` — the enrichment step below reassigns this.
+    let activities = all(
       `SELECT * FROM activities
         WHERE (${entityIds.length ? `entity_id IN (${ph}) OR ` : ''}project_id = ?)
           AND created_at >= ? AND created_at <= ?
